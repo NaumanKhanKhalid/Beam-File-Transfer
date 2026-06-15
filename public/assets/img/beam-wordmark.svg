@@ -1,0 +1,6 @@
+<svg width="220" height="64" viewBox="0 0 220 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="4" y="4" width="56" height="56" rx="15" fill="#4B3AFF"></rect>
+  <path d="M21 43L43 21M43 21H27M43 21V37" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path>
+  <circle cx="22.5" cy="45.5" r="4" fill="#C6FF3D"></circle>
+  <text x="74" y="44" font-family="&#39;Space Grotesk&#39;, sans-serif" font-size="38" font-weight="700" letter-spacing="-1.5" fill="#0E0F12">Beam</text>
+</svg>

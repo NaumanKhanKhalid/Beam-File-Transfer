@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<!-- PREVIEW ONLY: static mirror of layouts/guest.blade.php + pages/auth.blade.php. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="api-base" content="/api">
+<title>Log in — Beam</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="assets/js/tailwind.config.js"></script>
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body class="bg-ink-50 text-ink-700 antialiased min-h-screen">
+<main class="min-h-screen flex flex-col">
+  <div class="fade-in min-h-screen bg-ink-900 flex items-center justify-center p-6 relative overflow-hidden">
+    <div class="absolute w-[520px] h-[520px] rounded-full -top-[180px] -left-[120px] blur-[20px] opacity-50" style="background:radial-gradient(circle,#4B3AFF,transparent 68%)"></div>
+    <div class="absolute w-[360px] h-[360px] rounded-full -bottom-[140px] -right-[80px] blur-[18px] opacity-20" style="background:radial-gradient(circle,#C6FF3D,transparent 70%)"></div>
+    <a href="#" class="absolute top-7 left-8"><img src="assets/img/beam-wordmark-dark.svg" alt="Beam" class="h-7" onerror="this.outerHTML='<span class=\'font-display font-bold text-white text-xl\'>Beam</span>'"></a>
+
+    <form id="authForm" class="relative w-[420px] max-w-full bg-white rounded-3xl shadow-xl p-7" novalidate>
+      <h2 data-auth-heading class="font-display font-bold text-[26px] text-ink-900 tracking-tight text-center">Welcome back</h2>
+      <p data-auth-sub class="text-ink-400 text-sm text-center mt-1.5">Log in to track transfers and rooms.</p>
+      <div class="flex gap-1 bg-ink-75 rounded-xl p-1 mt-5">
+        <button type="button" data-auth-tab="login" class="flex-1 h-10 rounded-lg text-sm font-semibold transition-all bg-white text-ink-900 shadow-sm">Log in</button>
+        <button type="button" data-auth-tab="signup" class="flex-1 h-10 rounded-lg text-sm font-semibold transition-all text-ink-400 hover:text-ink-700">Sign up</button>
+      </div>
+      <button type="button" data-google class="w-full h-11 mt-5 rounded-xl border border-ink-200 hover:bg-ink-50 flex items-center justify-center gap-2.5 text-sm font-semibold text-ink-900 transition-colors">
+        <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.5 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-2 3.3-4.9 3.3-8.3z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.7c-1 .7-2.3 1.1-3.7 1.1-2.8 0-5.2-1.9-6.1-4.5H2.2v2.8A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.9 14.2a6.6 6.6 0 0 1 0-4.2V7.2H2.2a11 11 0 0 0 0 9.8l3.7-2.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3 .5 4.1 1.6l3.1-3.1A11 11 0 0 0 2.2 7.2L5.9 10c.9-2.6 3.3-4.5 6.1-4.5z"/></svg>
+        Continue with Google
+      </button>
+      <div class="flex items-center gap-3 my-4"><span class="h-px bg-ink-100 flex-1"></span><span class="text-[11px] font-mono text-ink-300 uppercase tracking-wider">or</span><span class="h-px bg-ink-100 flex-1"></span></div>
+      <div class="flex flex-col gap-3">
+        <label data-name-field class="flex-col gap-1.5 hidden">
+          <span class="text-[13px] font-semibold text-ink-900">Full name</span>
+          <input id="auName" type="text" placeholder="Mara Lin" autocomplete="name" class="w-full h-11 px-3.5 rounded-xl border border-ink-200 text-[15px] text-ink-900 outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/30 transition placeholder:text-ink-300">
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[13px] font-semibold text-ink-900">Email</span>
+          <input id="auEmail" type="email" placeholder="you@company.com" autocomplete="email" class="w-full h-11 px-3.5 rounded-xl border border-ink-200 text-[15px] text-ink-900 outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/30 transition placeholder:text-ink-300">
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[13px] font-semibold text-ink-900">Password</span>
+          <input id="auPass" type="password" placeholder="••••••••" autocomplete="current-password" class="w-full h-11 px-3.5 rounded-xl border border-ink-200 text-[15px] text-ink-900 outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/30 transition placeholder:text-ink-300">
+        </label>
+      </div>
+      <div data-forgot class="text-right mt-2"><button type="button" data-forgot-btn class="text-[13px] text-brand-600 font-semibold">Forgot password?</button></div>
+      <button type="submit" class="w-full h-[52px] mt-5 rounded-full bg-brand-500 hover:bg-brand-600 active:translate-y-px text-white font-semibold text-[16px] flex items-center justify-center gap-2 transition disabled:opacity-60 disabled:cursor-not-allowed">
+        <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V6z"/></svg><span data-submit-label>Log in</span>
+      </button>
+      <div class="text-center mt-4">
+        <a href="#" class="text-[13px] text-ink-500 hover:text-ink-900 font-semibold transition-colors">← Continue without an account</a>
+        <p class="text-[11px] text-ink-300 mt-2">You can send up to 2&nbsp;GB as a guest — no sign-in needed.</p>
+      </div>
+    </form>
+  </div>
+</main>
+<div id="toasts" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 items-center pointer-events-none"></div>
+<script type="module" src="assets/js/beam.js"></script>
+<script type="module" src="assets/js/page-auth.js"></script>
+</body>
+</html>

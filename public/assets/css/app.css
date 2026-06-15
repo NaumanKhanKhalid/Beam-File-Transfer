@@ -1,0 +1,122 @@
+  body { font-family: 'Hanken Grotesk', sans-serif; }
+  ::selection { background: #C6FF3D; color: #0E0F12; }
+  .font-display { font-family: 'Space Grotesk', sans-serif; }
+  .font-mono { font-family: 'Space Mono', monospace; }
+
+  /* ---- Mobile nav drawer --------------------------------------------------
+     The sidebar is a normal column on desktop; below 900px it becomes an
+     off-canvas drawer toggled by the topbar hamburger (body.nav-open). */
+  .nav-overlay { display: none; }
+  .nav-burger { display: none; }
+  @media (max-width: 900px) {
+    .app-sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: 60; transform: translateX(-100%); transition: transform .26s cubic-bezier(.22,1,.36,1); box-shadow: 0 0 40px rgba(0,0,0,.4); }
+    body.nav-open .app-sidebar { transform: none; }
+    .nav-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.55); opacity: 0; pointer-events: none; transition: opacity .26s; z-index: 55; }
+    body.nav-open .nav-overlay { opacity: 1; pointer-events: auto; }
+    .nav-burger { display: inline-flex; }
+  }
+
+  /* Realtime count bump — a quick green pulse when a download lands live. */
+  @keyframes beamFlash { 0% { color:#18B368; transform:scale(1.35); } 100% { color:inherit; transform:scale(1); } }
+  .flash { display:inline-block; animation: beamFlash .6s ease-out; }
+
+  /* Scroll-reveal: elements tagged [data-reveal] fade + rise into view. Base
+     state is visible so reduced-motion / no-JS never leaves anything hidden. */
+  @media (prefers-reduced-motion: no-preference) {
+    [data-reveal] { opacity:0; transform: translateY(16px); transition: opacity .6s cubic-bezier(.22,1,.36,1), transform .6s cubic-bezier(.22,1,.36,1); }
+    [data-reveal].revealed { opacity:1; transform:none; }
+    /* Dashboard transfer cards: staggered slide-in on (re)render. */
+    @keyframes cardIn { from { opacity:0; transform: translateY(14px); } to { opacity:1; transform:none; } }
+    .card-in { animation: cardIn .5s cubic-bezier(.22,1,.36,1) both; }
+  }
+
+  /* ---- Transfer-sent success animation ---------------------------------- */
+  /* Reduced-motion / no-JS safe defaults: badge + check fully shown, no sparks. */
+  .success-check { stroke-dasharray: 30; stroke-dashoffset: 0; }
+  .spark { position:absolute; left:50%; top:50%; width:7px; height:7px; border-radius:2px; background:#C6FF3D; transform: translate(-50%,-50%) scale(0); opacity:0; }
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes successPop { 0% { transform: scale(0) rotate(-14deg); opacity:0; } 60% { transform: scale(1.12) rotate(0); opacity:1; } 100% { transform: scale(1); } }
+    @keyframes checkDraw { to { stroke-dashoffset: 0; } }
+    @keyframes sparkBurst {
+      0%   { transform: translate(-50%,-50%) scale(.2); opacity:0; }
+      25%  { opacity:1; }
+      100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1); opacity:0; }
+    }
+    .success-badge { animation: successPop .55s cubic-bezier(.34,1.56,.64,1) both; }
+    .success-check { stroke-dashoffset: 30; animation: checkDraw .4s ease-out .38s forwards; }
+    .spark { animation: sparkBurst .7s cubic-bezier(.22,1,.36,1) .36s both; }
+  }
+  /* Selected-file rows: gentle slide-in as each file is added. Base state is
+     fully visible so reduced-motion (and no-JS) never leaves rows stuck hidden. */
+  @keyframes fileIn { from { opacity:0; transform: translateY(7px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: no-preference) {
+    .file-in { animation: fileIn .28s cubic-bezier(.22,1,.36,1) both; }
+  }
+  .scroll-thin::-webkit-scrollbar { width: 8px; }
+  .scroll-thin::-webkit-scrollbar-thumb { background: #DDE1E6; border-radius: 999px; }
+  @keyframes indet { 0%{margin-left:-35%} 100%{margin-left:100%} }
+  .indet > div { width:35% !important; animation: indet 1.2s cubic-bezier(.65,0,.35,1) infinite; }
+  .dz.active { border-color:#4B3AFF; background:#EEECFF; transform:scale(1.005); border-style:solid; }
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes dzPulse { 0%{ box-shadow:0 0 0 0 rgba(75,58,255,.22); } 70%{ box-shadow:0 0 0 10px rgba(75,58,255,0); } 100%{ box-shadow:0 0 0 0 rgba(75,58,255,0); } }
+    .dz.active { animation: dzPulse 1.15s ease-out infinite; }
+  }
+  .dz.active .dz-ring { transform:scale(1.06) rotate(8deg); box-shadow:0 12px 30px rgba(75,58,255,.30); }
+  .switch[data-on="true"] .track { background:#4B3AFF; }
+  .switch[data-on="true"] .thumb { transform:translateX(18px); }
+  .switch.sw-sm[data-on="true"] .thumb { transform:translateX(14px); }
+  .fade-in{ animation: fade .26s cubic-bezier(.2,.8,.2,1); }
+  @keyframes fade { from{transform:translateY(6px)} to{transform:none} }
+  @keyframes toastIn { from{transform:translate(-50%,12px);opacity:0} to{transform:translate(-50%,0);opacity:1} }
+  #toasts > div { animation: toastIn .2s cubic-bezier(.2,.8,.2,1); }
+
+  /* ---------- Dark mode (class overrides) ---------- */
+  body.dark { background:#0B0C0F; }
+  body.dark .bg-white { background:#16181D !important; }
+  body.dark .bg-ink-50 { background:#0B0C0F !important; }
+  body.dark .bg-ink-75 { background:#16181D !important; }
+  body.dark .bg-ink-100 { background:#20242B !important; }
+  body.dark .bg-brand-50 { background:rgba(75,58,255,.18) !important; }
+  body.dark .bg-success-50 { background:rgba(24,179,104,.16) !important; }
+  body.dark .bg-warning-50 { background:rgba(245,165,36,.16) !important; }
+  body.dark .bg-danger-50 { background:rgba(244,56,79,.16) !important; }
+  body.dark .text-ink-900 { color:#F2F4F6 !important; }
+  body.dark .text-ink-700 { color:#C7CCD3 !important; }
+  body.dark .text-ink-600 { color:#9AA1AC !important; }
+  body.dark .text-brand-600 { color:#968AFF !important; }
+  body.dark .text-brand-700 { color:#BBB3FF !important; }
+  body.dark .text-success-700 { color:#4ED98E !important; }
+  body.dark .text-warning-700 { color:#F5C46A !important; }
+  body.dark .text-danger-700 { color:#FF8092 !important; }
+  body.dark .border-ink-100 { border-color:#20242B !important; }
+  body.dark .border-ink-150 { border-color:#2E333C !important; }
+  body.dark .border-ink-200 { border-color:#2E333C !important; }
+  body.dark .border-ink-300 { border-color:#4A515C !important; }
+  body.dark .hover\:bg-ink-50:hover { background:#20242B !important; }
+  body.dark .hover\:bg-ink-100:hover { background:#2E333C !important; }
+  body.dark .dz { background:#16181D !important; }
+  body.dark .dz:hover, body.dark .dz.active { background:rgba(75,58,255,.14) !important; }
+  body.dark .shadow-sm, body.dark .shadow-md, body.dark .shadow-lg, body.dark .shadow-xl { box-shadow:0 8px 28px rgba(0,0,0,.5) !important; }
+  body.dark input::placeholder { color:#6B7280 !important; }
+
+  /* Text inputs default to a white browser background; in dark mode that left
+     near-white text (.text-ink-900 lightens to #F2F4F6) invisible on white.
+     Give every text field a dark surface so typed text shows. Inputs that opt
+     into .bg-transparent (e.g. the search pill) are left alone so they don't
+     get a boxy fill inside their pill container. */
+  body.dark input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not(.bg-transparent),
+  body.dark textarea:not(.bg-transparent),
+  body.dark select { background:#16181D !important; color:#F2F4F6 !important; border-color:#2E333C !important; }
+  /* Transparent inputs keep their container's surface; just fix the text colour. */
+  body.dark input.bg-transparent, body.dark textarea.bg-transparent { color:#F2F4F6 !important; }
+
+  /* Segmented controls (.segctl track): the SELECTED pill uses .bg-white, which
+     darkens to #16181D in dark mode — darker than the #20242B track, so it looked
+     sunken. Raise it to an elevated surface that reads as "selected". */
+  body.dark .segctl .bg-white { background:#3A4049 !important; }
+
+  /* Spark-green buttons must keep DARK text in dark mode (text-ink-900 is otherwise
+     lightened to near-white, killing contrast on the lime background). */
+  body.dark .bg-spark-500, body.dark .bg-spark-600,
+  body.dark .bg-spark-500 *, body.dark .bg-spark-600 * { color:#0E0F12 !important; }
+  body.dark .bg-spark-500:hover, body.dark .hover\:bg-spark-600:hover { color:#0E0F12 !important; }
