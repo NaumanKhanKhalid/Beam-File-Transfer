@@ -31,26 +31,23 @@ class Safepay
     }
 
     /**
-     * Create a payment session bound to a client auth token (passport), so the
-     * embedded checkout — which authenticates with that same token — can find
-     * the tracker. Returns the tracker token or null.
+     * Create a payment session (tracker) via Safepay's v3 payments API.
+     * Returns the tracker token or null.
      */
     public static function init(int $amountMinor, string $currency, string $orderId, ?string $passport = null): ?string
     {
         try {
-            $req = Http::acceptJson();
-            // Prefer binding the tracker to the passport; fall back to merchant secret.
-            $req = $passport
-                ? $req->withToken($passport)
-                : $req->withHeaders(['X-SFPY-MERCHANT-SECRET' => config('safepay.secret')]);
-            $res = $req->post(self::base() . '/order/v1/init', [
-                'client'      => config('safepay.api_key'),
-                'amount'      => $amountMinor,            // in minor units (paisa)
-                'currency'    => $currency,
-                'environment' => config('safepay.env', 'sandbox'),
-                'order_id'    => $orderId,
-            ]);
-            return $res->ok() ? data_get($res->json(), 'data.token') : null;
+            $res = Http::withHeaders(['X-SFPY-MERCHANT-SECRET' => config('safepay.secret')])
+                ->acceptJson()
+                ->post(self::base() . '/order/payments/v3/', [
+                    'merchant_api_key' => config('safepay.api_key'),
+                    'intent'           => 'CYBERSOURCE',
+                    'mode'             => 'payment',
+                    'entry_mode'       => 'flex',
+                    'currency'         => $currency,
+                    'amount'           => $amountMinor,
+                ]);
+            return $res->successful() ? data_get($res->json(), 'data.tracker.token') : null;
         } catch (\Throwable $e) {
             report($e);
             return null;
@@ -66,8 +63,7 @@ class Safepay
         try {
             $res = Http::withHeaders(['X-SFPY-MERCHANT-SECRET' => config('safepay.secret')])
                 ->acceptJson()
-                ->post(self::base() . '/client/passport/v1/token', []);
-            // Response shape varies: token may be data (string) or data.token.
+                ->post(self::base() . '/client/passport/v1/token', new \stdClass());   // empty JSON {}
             $json = $res->json();
             return is_string(data_get($json, 'data')) ? data_get($json, 'data') : data_get($json, 'data.token');
         } catch (\Throwable $e) {

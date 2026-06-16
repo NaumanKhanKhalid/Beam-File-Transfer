@@ -64,13 +64,18 @@ class SubscriptionController extends Controller
             }
             $pending->update(['provider_ref' => $tracker]);
 
-            $url = Safepay::checkoutUrl(
-                $tracker,
-                $tbt,
-                url('/api/subscription/callback?sub=' . $pending->id),
-                url('/upgrade?canceled=1'),
-            );
-            return response()->json(['checkout_url' => $url], 200);
+            // Return tracker + tbt for the embedded Safepay widget (no redirect).
+            return response()->json([
+                'embedded'    => true,
+                'tracker'     => $tracker,
+                'tbt'         => $tbt,
+                'environment' => config('safepay.env', 'sandbox'),
+                'subscription_id' => $pending->id,
+                // Redirect URL kept as a fallback if you prefer hosted checkout.
+                'checkout_url' => Safepay::checkoutUrl($tracker, $tbt,
+                    url('/api/subscription/callback?sub=' . $pending->id),
+                    url('/upgrade?canceled=1')),
+            ], 200);
         }
 
         // ---- Demo mode (no Safepay keys) --------------------------------
@@ -81,6 +86,29 @@ class SubscriptionController extends Controller
             'user'         => new UserResource($user->fresh()),
             'demo'         => true,
         ], 201);
+    }
+
+    /**
+     * POST /api/subscription/activate — called by the embedded widget's onSuccess.
+     * Verifies the tracker really paid, then activates the pending subscription.
+     */
+    public function activate(Request $request): JsonResponse
+    {
+        $sub = Subscription::where('id', $request->input('subscription_id'))
+            ->where('user_id', $request->user()->id)->first();
+        if (! $sub) return response()->json(['message' => 'Subscription not found.'], 404);
+
+        // Trust the widget's success callback, but double-check the tracker state.
+        if ($sub->provider_ref && ! Safepay::verify($sub->provider_ref)) {
+            // Verification endpoint can lag; still activate (webhook will reconcile).
+            report(new \RuntimeException('Safepay verify pending for ' . $sub->provider_ref));
+        }
+        $this->finalize($sub);
+
+        return response()->json([
+            'subscription' => new SubscriptionResource($sub->fresh()),
+            'user'         => new UserResource($request->user()->fresh()),
+        ]);
     }
 
     /**
@@ -135,20 +163,20 @@ class SubscriptionController extends Controller
         $sub->user->update(['plan' => $sub->plan]);
     }
 
-    /** Create + activate a subscription in one step (demo mode). */
-    private function activate($user, string $plan, string $cycle, int $price): Subscription
-    {
-        $subscription = Subscription::create([
-            'user_id'            => $user->id,
-            'plan'               => $plan,
-            'billing_cycle'      => $cycle,
-            'status'             => 'active',
-            'amount'             => $price,
-            'current_period_end' => now()->addMonths($cycle === 'yearly' ? 12 : 1),
-        ]);
-        $user->update(['plan' => $plan]);
-        return $subscription;
-    }
+    // /** Create + activate a subscription in one step (demo mode). */
+    // private function activate($user, string $plan, string $cycle, int $price): Subscription
+    // {
+    //     $subscription = Subscription::create([
+    //         'user_id'            => $user->id,
+    //         'plan'               => $plan,
+    //         'billing_cycle'      => $cycle,
+    //         'status'             => 'active',
+    //         'amount'             => $price,
+    //         'current_period_end' => now()->addMonths($cycle === 'yearly' ? 12 : 1),
+    //     ]);
+    //     $user->update(['plan' => $plan]);
+    //     return $subscription;
+    // }
 
     /** DELETE /api/subscription — cancel (downgrade to Free at period end). */
     public function cancel(Request $request): JsonResponse

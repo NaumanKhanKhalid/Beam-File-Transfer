@@ -69,6 +69,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/subscription',           [SubscriptionController::class, 'current']);
     Route::post('/subscription/checkout', [SubscriptionController::class, 'checkout']);
+    Route::post('/subscription/activate', [SubscriptionController::class, 'activate']);
     Route::delete('/subscription',        [SubscriptionController::class, 'cancel']);
 
     // ---- Admin only -------------------------------------------------------

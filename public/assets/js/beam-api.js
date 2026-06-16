@@ -150,6 +150,7 @@ class BeamApi {
     current: () => this.get('/subscription'),
     checkout: (plan, billing_cycle, payment_token) =>
       this.post('/subscription/checkout', { plan, billing_cycle, payment_token }),
+    activate: (subscription_id) => this.post('/subscription/activate', { subscription_id }),
     cancel: () => this.del('/subscription'),
   };
 

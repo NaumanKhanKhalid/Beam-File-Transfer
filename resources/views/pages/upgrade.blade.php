@@ -75,8 +75,9 @@
               </div>
               <div data-safepay-note class="hidden items-start gap-2.5 rounded-xl bg-brand-50 border border-brand-100 p-3.5 text-[13px] text-ink-600">
                 <span class="text-brand-500 flex-none mt-0.5"><x-icon name="shield" class="w-4 h-4" /></span>
-                <span>You’ll be securely redirected to <b class="text-ink-900">Safepay</b> to pay with <b class="text-ink-900">Card, JazzCash, or Easypaisa</b>.</span>
+                <span>You’ll pay securely below with <b class="text-ink-900">Card, JazzCash, or Easypaisa</b> — without leaving this page.</span>
               </div>
+              <div id="safepayMount" class="hidden mt-1 min-h-[120px]"></div>
             </div>
             <button type="button" id="payBtn" class="mt-5 w-full h-[52px] rounded-full bg-spark-500 hover:bg-spark-600 active:translate-y-px text-ink-900 font-semibold text-[16px] flex items-center justify-center gap-2 transition"><x-icon name="shield" class="w-[18px] h-[18px]" /><span data-pay-label>Pay</span> <span data-pay-total>Rs 0</span></button>
             <p data-pay-note class="text-[12px] text-ink-400 text-center mt-3">@if ($safepayOn) Secure payment via Safepay (Card / JazzCash / Easypaisa). @else Demo checkout — no real card is charged. Use 4242 4242 4242 4242. @endif</p>
