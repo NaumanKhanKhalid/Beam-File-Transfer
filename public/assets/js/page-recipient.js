@@ -52,10 +52,17 @@ function rowActions(i) {
 /* ---- views --------------------------------------------------------------- */
 function filesView() {
   const initials = initialsOf(t.sender);
+  // Branded header band when the sender is on a Pro plan with branding enabled.
+  const b = t.brand && (t.brand.name || t.brand.logo) ? t.brand : null;
+  const brandBand = b ? `
+    <div class="px-[26px] py-4 flex items-center gap-3" style="background:${b.accent || '#4B3AFF'}">
+      ${b.logo ? `<img src="${b.logo}" alt="${b.name || 'Brand'}" class="h-7 object-contain">` : `<span class="font-display font-bold text-white text-[17px] tracking-tight">${b.name || 'Your brand'}</span>`}
+    </div>` : '';
   return `
+    ${brandBand}
     <div class="px-[26px] pt-[26px] pb-5 border-b border-ink-100">
       <div class="flex items-center gap-2.5 mb-4">
-        <span class="w-8 h-8 rounded-full bg-brand-500 text-white font-display font-bold text-xs flex items-center justify-center">${initials}</span>
+        <span class="w-8 h-8 rounded-full text-white font-display font-bold text-xs flex items-center justify-center" style="background:${b?.accent || '#4B3AFF'}">${initials}</span>
         <span class="text-[13px] text-ink-400"><b class="text-ink-900 font-semibold">${t.sender || 'Mara Lin'}</b> sent you ${t.files.length} files<span data-dl-count class="text-success-700 font-semibold"></span></span>
         <span class="ml-auto">${badge('Encrypted')}</span>
       </div>
@@ -71,7 +78,7 @@ function filesView() {
           ? `<span class="flex items-center gap-1.5 text-xs text-warning-700 bg-warning-50 px-2.5 py-1 rounded-full font-mono whitespace-nowrap">${ic('clock', 'w-3.5 h-3.5')}<span data-expires="${t.expiresAt}">${fmtCountdown(t.expiresAt)}</span></span>`
           : `<span class="flex items-center gap-1.5 text-xs text-ink-400 font-mono whitespace-nowrap">${ic('clock', 'w-3.5 h-3.5')}Expires ${t.expires || ''}</span>`}
       </div>
-      <button type="button" data-download-all class="w-full h-[52px] rounded-full bg-spark-500 hover:bg-spark-600 active:translate-y-px text-ink-900 font-semibold text-[17px] flex items-center justify-center gap-2 transition">${ic('download', 'w-[18px] h-[18px]')}Download all</button>
+      <button type="button" data-download-all class="w-full h-[52px] rounded-full active:translate-y-px text-white font-semibold text-[17px] flex items-center justify-center gap-2 transition hover:brightness-105" style="background:${b?.accent || '#C6FF3D'};${b ? '' : 'color:#0E0F12;'}">${ic('download', 'w-[18px] h-[18px]')}Download all</button>
       <div class="flex items-center justify-center gap-4 mt-3.5">
         <span class="flex items-center gap-2 text-xs text-ink-400">${ic('shield', 'w-3.5 h-3.5 text-success-500')}End-to-end encrypted</span>
         <button type="button" data-show-qr class="flex items-center gap-1.5 text-xs font-semibold text-ink-500 hover:text-ink-900 px-2.5 py-1 rounded-full transition-colors">${ic('inbox', 'w-3.5 h-3.5')}Show QR</button>

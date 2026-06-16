@@ -160,9 +160,12 @@ class BeamApi {
       this.put('/profile/password', { current_password, password, password_confirmation }),
     deleteAccount: (password) => this.request('DELETE', '/account', { body: { password } }),
     branding: (fields) => {
+      // Laravel only parses multipart bodies on POST (not PUT), so we POST with
+      // method spoofing — otherwise the brand fields arrive empty and nothing saves.
       const fd = new FormData();
+      fd.append('_method', 'PUT');
       Object.entries(fields).forEach(([k, v]) => v != null && fd.append(k, v));
-      return this.put('/profile/branding', fd);
+      return this.request('POST', '/profile/branding', { body: fd });
     },
   };
 

@@ -312,6 +312,7 @@ async function doSend() {
       expiry: state.expiry,
       password: accessCode,
       burn: state.switches.burn, notify: state.switches.notify,
+      branded: true,   // backend applies the sender's brand only if they're Pro + branding enabled
       onProgress: (p) => { if (barEl()) barEl().style.width = Math.max(p, 2) + '%'; if (metaEl()) metaEl().textContent = `${humanSize(Math.round(totalBytes * p / 100))} / ${humanSize(totalBytes)}`; },
     });
     refs.deliver.innerHTML = sentPanelHtml({
