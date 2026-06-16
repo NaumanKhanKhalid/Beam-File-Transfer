@@ -22,7 +22,7 @@
             @foreach ([['shield', 'success', 'Secure', 'Encrypted'], ['zap', 'brand', 'Fast', 'High-speed'], ['lock', 'spark', 'Private', 'Yours only']] as [$icn, $tone, $title, $sub])
                 <div class="flex items-center gap-2 min-w-0">
                     <span class="w-8 h-8 rounded-lg flex items-center justify-center flex-none
-                        @if ($tone === 'success') bg-success-50 text-success-600
+                        @if ($tone === 'success') bg-success-50 text-success-700
                         @elseif ($tone === 'brand') bg-brand-50 text-brand-500
                         @else bg-spark-500/20 text-spark-600 @endif">
                         <x-icon :name="$icn" class="w-[17px] h-[17px]" />

@@ -21,7 +21,7 @@ const refs = {};
 
 function fileRowHtml(f, i) {
   const thumb = f.url
-    ? `<div class="w-11 h-11 rounded-xl flex-none bg-ink-100 bg-cover bg-center ring-1 ring-ink-150" style="background-image:url('${f.url}')"></div>`
+    ? `<div class="w-11 h-11 rounded-xl flex-none bg-cover bg-center ring-1 ring-ink-150" style="background-color:#ECEEF1;background-image:url('${f.url}')"></div>`
     : `<div class="w-11 h-11 rounded-xl flex items-center justify-center flex-none text-white font-mono font-bold text-[11px] uppercase shadow-sm" style="background:${KIND[f.kind] || KIND.default}">${ext(f.name)}</div>`;
   return `<div class="file-in group flex items-center gap-3 p-2 rounded-xl hover:bg-ink-50 transition-colors" style="animation-delay:${Math.min(i, 8) * 45}ms">
     ${thumb}

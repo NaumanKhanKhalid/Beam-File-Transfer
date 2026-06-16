@@ -243,6 +243,9 @@ function initAccountSecurity() {
 /* ---- Boot ---------------------------------------------------------------- */
 document.addEventListener('DOMContentLoaded', async () => {
   $('[data-save-profile]').addEventListener('click', saveProfile);
+  // Returning from Safepay checkout (callback redirected here).
+  const q = new URLSearchParams(location.search);
+  if (q.has('subscribed')) { toast('Payment confirmed — your plan is active 🎉', 'success'); history.replaceState({}, '', location.pathname); }
   // Remember the locked free-state markup before any swap, so we can revert.
   lockedPlanHtml = $('#planCard')?.innerHTML || '';
   lockedBrandHtml = $('#brandingCard')?.innerHTML || '';

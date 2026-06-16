@@ -118,12 +118,12 @@ function maybeShowVerifyBanner(u) {
   if (document.getElementById('verifyBar')) return;
   const bar = document.createElement('div');
   bar.id = 'verifyBar';
-  bar.className = 'flex items-center gap-3 px-4 sm:px-7 py-2.5 bg-warning-50 border-b border-warning-200 text-warning-800 text-[13px]';
+  bar.className = 'flex items-center gap-3 px-4 sm:px-7 py-2.5 bg-warning-50 border-b border-warning-200 text-ink-900 text-[13px]';
   bar.innerHTML = `
-    ${ic('mail', 'w-4 h-4 flex-none')}
-    <span class="flex-1 min-w-0">Confirm your email to secure your account and get download alerts.</span>
-    <button type="button" data-verify-resend class="font-semibold underline whitespace-nowrap hover:text-warning-900">Resend email</button>
-    <button type="button" data-verify-dismiss aria-label="Dismiss" class="flex-none opacity-60 hover:opacity-100">${ic('x', 'w-4 h-4')}</button>`;
+    <span class="w-7 h-7 rounded-lg bg-warning-500/20 text-warning-700 flex items-center justify-center flex-none">${ic('mail', 'w-4 h-4')}</span>
+    <span class="flex-1 min-w-0"><b class="font-semibold">Confirm your email</b> <span class="text-ink-500">to secure your account and get download alerts.</span></span>
+    <button type="button" data-verify-resend class="h-7 px-3 rounded-full bg-warning-500 text-white font-semibold whitespace-nowrap hover:brightness-105 transition flex-none">Resend</button>
+    <button type="button" data-verify-dismiss aria-label="Dismiss" class="w-7 h-7 flex items-center justify-center rounded-full text-ink-400 hover:bg-warning-500/15 transition flex-none">${ic('x', 'w-4 h-4')}</button>`;
   const main = document.querySelector('main');
   const topbar = main?.querySelector('header');
   if (topbar && topbar.parentNode) topbar.parentNode.insertBefore(bar, topbar.nextSibling);

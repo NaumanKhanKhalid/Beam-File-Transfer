@@ -32,6 +32,10 @@ Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 've
 
 Route::get('/plans',     [SubscriptionController::class, 'plans']);
 
+// Safepay returns the user here after checkout, and posts here server-to-server.
+Route::get('/subscription/callback', [SubscriptionController::class, 'callback']);
+Route::post('/subscription/webhook', [SubscriptionController::class, 'webhook']);
+
 // Storage usage / quota for the current sender (guest by IP, or signed-in user).
 Route::get('/usage',     [UsageController::class, 'show']);
 

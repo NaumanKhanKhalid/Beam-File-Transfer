@@ -6,7 +6,7 @@
 import { api, ApiError, toast } from './beam.js';
 
 const $ = (s, r = document) => r.querySelector(s);
-const money = (n) => '₹' + Number(n).toLocaleString('en-IN');
+const money = (n) => 'Rs ' + Number(n).toLocaleString('en-PK');
 const META = {
   free: { name: 'Free', tagline: 'For the occasional send' },
   pro: { name: 'Pro', tagline: 'For freelancers & creators' },
@@ -59,6 +59,13 @@ function showCheckout(plan) {
   $('[data-sum-total]').textContent = money(total);
   $('[data-pay-total]').textContent = money(total);
 
+  // Safepay configured → hide the card form, show the redirect notice.
+  const safepay = $('#checkoutView').dataset.safepay === '1';
+  $('[data-card-fields]')?.classList.toggle('hidden', safepay);
+  const note = $('[data-safepay-note]');
+  if (note) { note.classList.toggle('hidden', !safepay); note.classList.toggle('flex', safepay); }
+  const lbl = $('[data-pay-label]'); if (lbl) lbl.textContent = safepay ? 'Continue ·' : 'Pay';
+
   $('#pricingView').classList.add('hidden');
   $('#checkoutView').classList.remove('hidden');
   window.scrollTo({ top: 0 });
@@ -74,13 +81,14 @@ async function pay() {
   const email = $('#coEmail').value.trim();
   const card = $('#coCard').value.replace(/\s/g, '');
   if (!email.includes('@')) { toast('Enter a valid email.', 'danger'); return; }
-  if (card.length < 12) { toast('Enter a valid card number (try 4242 4242 4242 4242).', 'danger'); return; }
   if (!api.authenticated) { toast('Log in first to subscribe.', 'brand'); setTimeout(() => location.assign('/login'), 700); return; }
 
   const btn = $('#payBtn'); btn.disabled = true;
   try {
-    // In production: tokenise the card with Razorpay/Stripe and pass that token.
-    await api.subscription.checkout(chosen, billing, 'demo_tok_' + Date.now());
+    const r = await api.subscription.checkout(chosen, billing, 'tok_' + Date.now());
+    // Safepay configured → redirect to the hosted checkout (cards / JazzCash / Easypaisa).
+    if (r && r.checkout_url) { toast('Redirecting to secure checkout…', 'brand'); location.assign(r.checkout_url); return; }
+    // Demo mode (no payment keys) → plan activated instantly.
     toast(`Welcome to Beam ${META[chosen].name} 🎉 — your plan is active`, 'success');
     setTimeout(() => location.assign('/settings'), 700);
   } catch (e) {

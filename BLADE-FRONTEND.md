@@ -171,6 +171,18 @@ upgrade page, `Quota` and expiry clamping all read through PlanRepo. Endpoints:
 `GET /api/admin/plans`, `POST /api/admin/plans`, `PUT /api/admin/plans/{key}`,
 `DELETE /api/admin/plans/{key}`. **Run `php artisan migrate`** to create the `plans` table.
 
+## Payments (Safepay)
+
+Subscriptions use **Safepay** (Pakistan — cards + JazzCash + Easypaisa). Configure keys
+from `backend/.env.safepay.example` (free sandbox keys at safepay.pk, no documents).
+Flow: Upgrade → `POST /api/subscription/checkout` creates a Safepay session + a `pending`
+subscription and returns `checkout_url` → browser redirects to Safepay → on success
+Safepay redirects to `GET /api/subscription/callback` (verifies the tracker, activates the
+plan) and also posts `POST /api/subscription/webhook` (idempotent server confirmation) →
+user lands on `/settings?subscribed=1`. **Without keys it runs in DEMO mode** — checkout
+activates the plan instantly so local testing works. Run `php artisan migrate` for the
+`subscriptions.provider_ref` column.
+
 ## Running
 
 ```bash

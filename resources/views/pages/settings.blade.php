@@ -19,15 +19,15 @@
         <div class="mt-5 flex items-center gap-3"><button type="button" data-save-profile class="h-[42px] px-5 rounded-full bg-spark-500 hover:bg-spark-600 text-ink-900 text-sm font-semibold transition-colors">Save changes</button><span data-profile-hint class="text-[12px] text-ink-400"></span></div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
         {{-- Plan (free default; JS swaps to Pro when signed-in user is Pro) --}}
-        <div id="planCard" data-reveal class="bg-white border border-ink-100 rounded-2xl p-6 shadow-sm">
+        <div id="planCard" data-reveal class="bg-white border border-ink-100 rounded-2xl p-6 shadow-sm flex flex-col">
             <div class="flex items-start justify-between gap-3 mb-4">
                 <div><div class="flex items-center gap-2"><h3 class="font-display font-bold text-lg text-ink-900 tracking-tight">Plan</h3><x-badge tone="neutral" label="Free" :dot="false" /></div>
                 <p class="text-[13px] text-ink-400 mt-0.5">Free plan — up to 2 GB per transfer, 7 day expiry.</p></div>
                 <x-icon name="crown" class="w-7 h-7 text-ink-300" />
             </div>
-            <div class="rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 p-5 text-white relative overflow-hidden">
+            <div class="rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 p-5 text-white relative overflow-hidden mt-auto">
                 <div class="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-spark-500 opacity-20 blur-lg"></div>
                 <div class="relative">
                     <div class="font-display font-bold text-xl">Beam Pro — ₹749/mo</div>
@@ -38,12 +38,12 @@
         </div>
 
         {{-- Storage --}}
-        <div data-reveal class="bg-white border border-ink-100 rounded-2xl p-6 shadow-sm">
+        <div data-reveal class="bg-white border border-ink-100 rounded-2xl p-6 shadow-sm flex flex-col">
             <div class="mb-4"><h3 class="font-display font-bold text-lg text-ink-900 tracking-tight">Storage</h3><p data-storage-sub class="text-[13px] text-ink-400 mt-0.5">Loading…</p></div>
             <div class="h-2.5 bg-ink-100 rounded-full overflow-hidden"><div data-storage-fill class="h-full rounded-full transition-all duration-500" style="width:0%;background:#4B3AFF"></div></div>
             <div class="grid grid-cols-3 gap-3 mt-5">
                 @foreach ([['Transfers', 'transfers', 'inbox'], ['Downloads', 'downloads', 'download'], ['Active', 'active', 'check']] as [$k, $key, $icn])
-                    <div class="bg-ink-50 border border-ink-100 rounded-xl px-4 py-3"><div class="flex items-center gap-1.5 text-ink-400"><x-icon :name="$icn" class="w-4 h-4" /><span class="text-[11px] font-semibold tracking-[.08em] uppercase">{{ $k }}</span></div><div data-stat="{{ $key }}" class="font-display font-bold text-xl text-ink-900 mt-1">—</div></div>
+                    <div class="bg-ink-50 border border-ink-100 rounded-xl px-4 py-3 flex flex-col gap-1"><div class="flex items-center gap-1.5 text-ink-400"><x-icon :name="$icn" class="w-4 h-4" /><span class="text-[11px] font-semibold tracking-[.08em] uppercase">{{ $k }}</span></div><div data-stat="{{ $key }}" class="font-display font-bold text-xl text-ink-900">—</div></div>
                 @endforeach
             </div>
         </div>
