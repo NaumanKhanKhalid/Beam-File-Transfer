@@ -46,36 +46,52 @@ function confirmAction({ title, body, confirmLabel = 'Confirm' }) {
 function render() {
   const host = $('#adminPlans');
   if (!host) return;
-  const row = (pi, key, label, val, suffix = '') =>
-    `<label class="flex items-center justify-between gap-2 py-1.5">
-      <span class="text-[12px] text-ink-500">${label}</span>
+  const row = (pi, key, label, val, suffix = '', icon = null) =>
+    `<label class="flex items-center justify-between gap-2 py-2">
+      <span class="flex items-center gap-2 text-[13px] text-ink-600">${icon ? `<span class="text-ink-300">${ic(icon, 'w-4 h-4')}</span>` : ''}${label}</span>
       <span class="flex items-center gap-1.5">
         <input data-pf="${pi}:${key}" value="${val}" inputmode="decimal"
-          class="w-[88px] h-8 px-2.5 text-right rounded-lg border border-ink-200 text-[13px] font-mono text-ink-900 bg-white outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20 transition">
-        <span class="text-[11px] text-ink-400 w-8">${suffix}</span>
+          class="w-[84px] h-9 px-2.5 text-right rounded-lg border border-ink-200 text-[13px] font-mono font-semibold text-ink-900 bg-white outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20 transition">
+        <span class="text-[11px] text-ink-400 w-9">${suffix}</span>
       </span>
     </label>`;
   host.innerHTML = plansData.map((p, pi) => {
-    const accent = p.branding ? 'border-brand-200' : 'border-ink-150';
-    return `<div data-plan-card="${pi}" class="rounded-2xl border ${accent} bg-white p-4 flex flex-col">
-      <div class="flex items-center gap-2 mb-3">
+    const branded = !!p.branding;
+    // Tier accent: branded plans get a lime chip + brand ring; free is neutral.
+    const ring = branded ? 'ring-1 ring-brand-500/30' : '';
+    const chip = branded ? 'bg-spark-500 text-ink-900' : 'bg-white/10 text-spark-500';
+    const tierIcon = branded ? 'crown' : 'shield';
+    const yearlySave = p.monthly > 0 && p.yearly > 0 && p.yearly < p.monthly
+      ? Math.round((1 - p.yearly / p.monthly) * 100) : 0;
+    return `<div data-plan-card="${pi}" class="rounded-2xl border border-ink-150 ${ring} bg-white overflow-hidden shadow-sm flex flex-col">
+      <div class="bg-ink-900 px-4 py-3.5 flex items-center gap-2.5">
+        <span class="w-8 h-8 rounded-lg ${chip} flex items-center justify-center flex-none">${ic(tierIcon, 'w-[16px] h-[16px]')}</span>
         <input data-pf="${pi}:name" value="${p.name}" placeholder="Plan name"
-          class="flex-1 min-w-0 font-display font-bold text-[16px] text-ink-900 bg-transparent border-b border-transparent hover:border-ink-150 focus:border-brand-500 outline-none transition pb-0.5">
-        <button type="button" data-plan-del="${pi}" aria-label="Delete plan" class="w-8 h-8 flex items-center justify-center rounded-full text-ink-300 hover:bg-danger-50 hover:text-danger-500 transition-colors flex-none">${ic('trash', 'w-4 h-4')}</button>
+          class="flex-1 min-w-0 font-display font-bold text-[16px] text-white bg-transparent border-b border-transparent hover:border-white/20 focus:border-spark-500 outline-none transition pb-0.5 placeholder:text-ink-500">
+        <button type="button" data-plan-del="${pi}" aria-label="Delete plan" class="w-8 h-8 flex items-center justify-center rounded-full text-ink-400 hover:bg-danger-500/15 hover:text-danger-400 transition-colors flex-none">${ic('trash', 'w-[15px] h-[15px]')}</button>
       </div>
-      <div class="border-t border-ink-100 pt-1">
-        ${row(pi, 'monthly', 'Monthly', p.monthly, '₹')}
-        ${row(pi, 'yearly', 'Yearly', p.yearly, '₹/mo')}
-        ${row(pi, 'gb', 'Storage', Math.round((p.max_bytes / GB) * 10) / 10, 'GB')}
-        ${row(pi, 'expiry_days', 'Expiry', p.expiry_days, 'days')}
+
+      <div class="p-4 flex flex-col flex-1">
+        <div class="flex items-baseline gap-1.5 pb-3 mb-1 border-b border-ink-100">
+          <span class="font-display font-bold text-[26px] text-ink-900 tracking-tight">${p.monthly > 0 ? '₹' + p.monthly : 'Free'}</span>
+          ${p.monthly > 0 ? '<span class="text-[13px] text-ink-400">/mo</span>' : ''}
+          ${yearlySave ? `<span class="ml-auto text-[11px] font-bold text-success-700 bg-success-50 px-2 py-0.5 rounded-full">Save ${yearlySave}% yearly</span>` : ''}
+        </div>
+
+        ${row(pi, 'monthly', 'Monthly price', p.monthly, '₹', 'zap')}
+        ${row(pi, 'yearly', 'Yearly price', p.yearly, '₹/mo', 'crown')}
+        ${row(pi, 'gb', 'Storage', Math.round((p.max_bytes / GB) * 10) / 10, 'GB', 'inbox')}
+        ${row(pi, 'expiry_days', 'Link expiry', p.expiry_days, 'days', 'clock')}
+
+        <label class="flex items-center justify-between gap-2 py-2.5 mt-1 border-t border-ink-100">
+          <span class="flex items-center gap-2 text-[13px] text-ink-600"><span class="text-ink-300">${ic('palette', 'w-4 h-4')}</span>Custom branding</span>
+          <button type="button" data-plan-brand="${pi}" class="w-10 h-6 rounded-full transition-colors relative ${branded ? 'bg-brand-500' : 'bg-ink-200'}">
+            <span class="absolute top-0.5 ${branded ? 'left-[18px]' : 'left-0.5'} w-5 h-5 rounded-full bg-white shadow transition-all"></span>
+          </button>
+        </label>
+
+        <button type="button" data-plan-save="${pi}" class="mt-auto pt-0 h-10 rounded-xl text-[13px] font-semibold transition-colors ${p._dirty || p._new ? 'bg-spark-500 hover:bg-spark-600 text-ink-900' : 'bg-ink-100 text-ink-400 cursor-not-allowed'}">${p._new ? 'Create plan' : (p._dirty ? 'Save changes' : 'Saved')}</button>
       </div>
-      <label class="flex items-center justify-between gap-2 py-2 mt-1 border-t border-ink-100">
-        <span class="text-[12px] text-ink-500">Custom branding</span>
-        <button type="button" data-plan-brand="${pi}" class="w-10 h-6 rounded-full transition-colors relative ${p.branding ? 'bg-brand-500' : 'bg-ink-200'}">
-          <span class="absolute top-0.5 ${p.branding ? 'left-[18px]' : 'left-0.5'} w-5 h-5 rounded-full bg-white shadow transition-all"></span>
-        </button>
-      </label>
-      <button type="button" data-plan-save="${pi}" class="mt-2 h-9 rounded-full text-[13px] font-semibold transition-colors ${p._dirty || p._new ? 'bg-spark-500 hover:bg-spark-600 text-ink-900' : 'bg-ink-100 text-ink-400 cursor-not-allowed'}">${p._new ? 'Create plan' : 'Save'}</button>
     </div>`;
   }).join('');
 

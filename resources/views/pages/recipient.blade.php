@@ -25,7 +25,7 @@
 @endphp
 
 @section('content')
-<div class="fade-in min-h-screen bg-ink-900 flex items-center justify-center p-10 relative overflow-hidden">
+<div class="fade-in min-h-screen bg-ink-900 flex items-center justify-center p-4 sm:p-10 relative overflow-hidden">
     <div class="absolute w-[520px] h-[520px] rounded-full -top-[180px] -left-[120px] blur-[20px] opacity-50" style="background:radial-gradient(circle,#4B3AFF,transparent 68%)"></div>
     <div class="absolute w-[360px] h-[360px] rounded-full -bottom-[140px] -right-[80px] blur-[18px] opacity-20" style="background:radial-gradient(circle,#C6FF3D,transparent 70%)"></div>
     <img src="{{ asset('assets/img/beam-wordmark-dark.svg') }}" alt="Beam" class="absolute top-7 left-8 h-7"
