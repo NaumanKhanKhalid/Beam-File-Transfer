@@ -162,14 +162,14 @@ Run `php artisan beam:prune --dry-run` to preview.
 
 ## Admin
 
-`/admin` (guest layout, `admin` middleware): subscribers table + **Plans & pricing** editor.
-Destructive row actions (Cancel, Remove) go through a **confirm dialog** so a stray click
-can't act. Plans are **DB-backed** (`plans` table via `App\Models\Plan` / `App\Support\PlanRepo`,
-seeded from config/plans.php on first use): admins can **create, edit (name, prices,
-storage, expiry, branding) and delete** plans. `/api/plans`, the upgrade page, `Quota` and
-expiry clamping all read through PlanRepo. Endpoints: `GET /api/admin/plans`,
-`POST /api/admin/plans`, `PUT /api/admin/plans/{key}`, `DELETE /api/admin/plans/{key}`.
-**Run `php artisan migrate`** to create the `plans` table.
+`/admin` (Subscribers) and `/admin/plans` (Plans & pricing) are **two pages** sharing a
+dark tabbed header (`x-admin-header`). Subscribers: metrics + table, with destructive
+actions (Cancel, Remove) behind a **confirm dialog**. Plans: full editor (create / edit
+name, prices, storage, expiry, branding / delete) — **DB-backed** via `App\Models\Plan` /
+`App\Support\PlanRepo` (seeded from config/plans.php on first use). `/api/plans`, the
+upgrade page, `Quota` and expiry clamping all read through PlanRepo. Endpoints:
+`GET /api/admin/plans`, `POST /api/admin/plans`, `PUT /api/admin/plans/{key}`,
+`DELETE /api/admin/plans/{key}`. **Run `php artisan migrate`** to create the `plans` table.
 
 ## Running
 

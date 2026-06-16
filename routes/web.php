@@ -31,6 +31,7 @@ Route::view('/upgrade', 'pages.upgrade', [
 
 // ---- Admin ----------------------------------------------------------------
 Route::view('/admin', 'pages.admin')->name('admin');
+Route::view('/admin/plans', 'pages.admin-plans')->name('admin.plans');
 
 // ---- Auth (guest layout) --------------------------------------------------
 Route::view('/login', 'pages.auth')->name('login');
