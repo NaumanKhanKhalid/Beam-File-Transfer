@@ -1,6 +1,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">
+{{-- Current signed-in user (base64 JSON) for the SPA's cookie-session auth; empty for guests. --}}
+<meta name="auth-user" content="{{ auth()->check() ? base64_encode(json_encode(['name' => auth()->user()->name, 'email' => auth()->user()->email, 'plan' => auth()->user()->plan, 'is_admin' => (bool) auth()->user()->is_admin, 'verified' => (bool) auth()->user()->email_verified_at])) : '' }}">
 {{-- API base for beam-api.js (same backend React will use). Defaults to /api. --}}
 <meta name="api-base" content="{{ config('app.api_base', '/api') }}">
 <title>@yield('title', 'Beam') — Send big. Then it's gone.</title>

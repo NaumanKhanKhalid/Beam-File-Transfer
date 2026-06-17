@@ -83,6 +83,16 @@ bytes on top. `TransferController@store` enforces the SAME quota server-side
 limit is hit — the UI then pushes guests to register and paid users to upgrade.
 **Run `php artisan migrate`** to add the `sender_ip` column this needs.
 
+### One-time guest send
+
+Beyond the 2 GB cap, a guest may complete **only one transfer per IP, ever**.
+`TransferController@store` / `@commit` call `guestPassGuard()` before creating, and
+`GuestPass::burn($ip)` after a successful guest send — recording the IP in the
+persistent `guest_passes` table (survives transfer expiry/deletion). A spent IP gets
+422 `guest_used`; `page-send.js` then sets `beam.guestUsed` locally and routes them to
+sign up. The welcome gate in `beam.js` reads that same flag and drops "Continue as a
+guest" once used. **Run `php artisan migrate`** for the `guest_passes` table.
+
 ## Realtime download updates (WebSockets, optional)
 
 The Transfers dashboard updates download counts live. Two layers:
@@ -171,17 +181,48 @@ upgrade page, `Quota` and expiry clamping all read through PlanRepo. Endpoints:
 `GET /api/admin/plans`, `POST /api/admin/plans`, `PUT /api/admin/plans/{key}`,
 `DELETE /api/admin/plans/{key}`. **Run `php artisan migrate`** to create the `plans` table.
 
-## Payments (Safepay)
+**Access control:** both admin pages are guarded **server-side** — the web routes carry
+`->middleware(['auth','admin'])`, so guests are redirected to `/login` and signed-in
+non-admins to `/` *before the page renders* (cookie sessions make this possible). The
+`admin.*` API endpoints also sit behind `auth:sanctum` + `admin`. `requireAdmin()` in
+`beam.js` remains as a client-side belt-and-braces (hides content behind a "Checking
+access…" overlay until `/me` confirms `is_admin`).
 
-Subscriptions use **Safepay** (Pakistan — cards + JazzCash + Easypaisa). Configure keys
-from `backend/.env.safepay.example` (free sandbox keys at safepay.pk, no documents).
-Flow: Upgrade → `POST /api/subscription/checkout` creates a Safepay session + a `pending`
-subscription and returns `checkout_url` → browser redirects to Safepay → on success
-Safepay redirects to `GET /api/subscription/callback` (verifies the tracker, activates the
-plan) and also posts `POST /api/subscription/webhook` (idempotent server confirmation) →
-user lands on `/settings?subscribed=1`. **Without keys it runs in DEMO mode** — checkout
-activates the plan instantly so local testing works. Run `php artisan migrate` for the
-`subscriptions.provider_ref` column.
+## Authentication (Sanctum cookie sessions)
+
+The SPA uses **Sanctum stateful (cookie/session) auth**, not bearer tokens. `statefulApi()`
+(in `bootstrap/app.php`) makes same-origin `/api/*` requests session-aware. Flow:
+`POST /api/login` / `/register` call `Auth::login()` + `session()->regenerate()` and set an
+**HttpOnly session cookie**; the client sends it automatically (`credentials:'include'`) and
+attaches the `<meta name="csrf-token">` value as `X-CSRF-TOKEN` on writes. `POST /api/logout`
+invalidates the session. Because the cookie is HttpOnly, JS can't read auth state, so each
+Blade page renders `<meta name="auth-user">` (base64 JSON, empty for guests) and `beam-api.js`
+reads it for `api.authenticated` / `api.user`. **Setup:** set `SANCTUM_STATEFUL_DOMAINS`
+(e.g. `localhost:8000`) and `SESSION_DOMAIN` in `.env`, keep `config/cors.php`
+`supports_credentials => true`, and serve the page and API on the **same origin**.
+
+## Continue with Google (OAuth via Socialite)
+
+"Continue with Google" on the auth page **and** the welcome gate uses **Laravel
+Socialite**. Routes: `GET /auth/google/redirect` (→ Google consent) and
+`GET /auth/google/callback` (`GoogleAuthController`): Socialite resolves the Google
+user, we find-or-create the account (linked by `google_id`, else verified email; email
+auto-verified), then `Auth::login()` starts the same cookie session and redirects to `/`.
+
+**Setup:**
+1. `composer require laravel/socialite`
+2. Keys from `backend/.env.google.example` (`GOOGLE_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI`).
+   Without them the button shows a "not configured yet" toast.
+3. `php artisan migrate` for the `users.google_id` / `avatar_url` columns.
+   Sign-in establishes the same cookie session as email/password (no token handoff).
+
+## Payments (demo checkout)
+
+Subscriptions use a **demo checkout** — no real payment gateway. The Upgrade page
+collects card details (use `4242 4242 4242 4242`) purely for show. Flow:
+Upgrade → `POST /api/subscription/checkout` creates an `active` subscription and bumps
+the user's plan immediately → the browser lands on `/settings`. Swap the demo
+`activate()` in `SubscriptionController` for a real gateway when you're ready to charge.
 
 ## Running
 

@@ -3,7 +3,10 @@
 @section('title', 'Beam Admin — Plans')
 
 @section('content')
-<div class="min-h-screen bg-ink-50">
+<div id="adminAccessCheck" class="fixed inset-0 z-[90] flex items-center justify-center bg-ink-50">
+    <div class="flex items-center gap-2.5 text-ink-400 text-sm font-semibold"><span class="w-4 h-4 rounded-full border-2 border-ink-200 border-t-ink-500 animate-spin"></span>Checking access…</div>
+</div>
+<div data-admin-content style="visibility:hidden" class="min-h-screen bg-ink-50">
     <x-admin-header active="plans" />
 
     <div class="max-w-[1080px] mx-auto px-4 sm:px-8 -mt-14 pb-10 fade-in">

@@ -12,7 +12,7 @@ class Transfer extends Model
     protected $fillable = [
         'user_id', 'slug', 'title', 'message', 'sender_name', 'sender_ip', 'recipients',
         'password_hash', 'burn_after_download', 'notify_on_download',
-        'total_bytes', 'download_count', 'expires_at', 'burned_at', 'brand',
+        'total_bytes', 'download_count', 'download_limit', 'expires_at', 'burned_at', 'brand',
     ];
 
     protected $hidden = ['password_hash', 'sender_ip'];
@@ -24,6 +24,7 @@ class Transfer extends Model
             'brand'               => 'array',
             'burn_after_download' => 'boolean',
             'notify_on_download'  => 'boolean',
+            'download_limit'      => 'integer',
             'expires_at'          => 'datetime',
             'burned_at'           => 'datetime',
         ];
@@ -70,13 +71,18 @@ class Transfer extends Model
      */
     public static function resolveExpiry(string $plan, ?string $token): ?\Illuminate\Support\Carbon
     {
-        $planMax = (int) config("plans.$plan.expiry_days", 7);
-        $map     = ['24h' => 1, '1d' => 1, '3d' => 3, '7d' => 7, '30d' => 30, '60d' => 60, '1y' => 365, 'forever' => null];
-        $token   = $token ?: '7d';
-        $days    = array_key_exists($token, $map) ? $map[$token] : 7;
-        if ($days === null) {
-            return $planMax >= 3650 ? null : now()->addDays($planMax);   // true "forever" only for top tier
+        $planMaxMin = \App\Support\PlanRepo::get($plan, 'expiry_minutes', 7 * 1440);   // null = unlimited
+        $map = [
+            '10m' => 10, '30m' => 30, '1h' => 60, '6h' => 360, '12h' => 720,
+            '24h' => 1440, '1d' => 1440, '3d' => 4320, '7d' => 10080,
+            '30d' => 43200, '60d' => 86400, '1y' => 525600, 'forever' => null,
+        ];
+        $token  = $token ?: '7d';
+        $reqMin = array_key_exists($token, $map) ? $map[$token] : 10080;
+        if ($planMaxMin === null) {
+            return $reqMin === null ? null : now()->addMinutes($reqMin);   // unlimited plan honours the request
         }
-        return now()->addDays(min($days, $planMax));
+        $eff = $reqMin === null ? $planMaxMin : min($reqMin, $planMaxMin);
+        return now()->addMinutes($eff);
     }
 }

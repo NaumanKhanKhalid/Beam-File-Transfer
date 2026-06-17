@@ -64,6 +64,15 @@ async function submit(e) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Surface an OAuth failure that bounced back as ?google=…
+  const gErr = new URLSearchParams(location.search).get('google');
+  if (gErr) {
+    toast(gErr === 'unconfigured'
+      ? 'Google sign-in isn’t set up on the server yet — add your Google keys to .env.'
+      : 'Google sign-in didn’t complete. Please try again.', 'danger');
+    history.replaceState({}, '', location.pathname);
+  }
+
   // Already signed in? Go to the app.
   if (api.authenticated) { location.assign('/'); return; }
 
@@ -80,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
       toast(err instanceof ApiError ? err.first : 'Could not send the reset email.', 'danger');
     } finally { btn.disabled = false; }
   });
-  $('[data-google]').addEventListener('click', () => toast('Social sign-in isn\'t wired to the API yet.', 'brand'));
+  $('[data-google]').addEventListener('click', () => { location.assign('/auth/google/redirect'); });
   $('#authForm').addEventListener('submit', submit);
 
   // Honour ?mode=signup from the sidebar/topbar links.

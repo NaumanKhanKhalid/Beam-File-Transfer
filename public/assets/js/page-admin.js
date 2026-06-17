@@ -4,7 +4,7 @@
  * api.admin.subscribers when signed in as admin). Mutations update the list
  * and call the admin API best-effort (works once rows carry a real id).
  */
-import { api, ApiError, toast, initialsOf, ic } from './beam.js';
+import { api, ApiError, toast, initialsOf, ic, requireAdmin } from './beam.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const money = (n) => '₹' + Number(n).toLocaleString('en-IN');
@@ -234,6 +234,7 @@ function syncPriceMap() {
 
 /* ---- Boot ---------------------------------------------------------------- */
 document.addEventListener('DOMContentLoaded', async () => {
+  if (!(await requireAdmin())) return;   // admins only — guard bounces everyone else
   try { users = JSON.parse($('#adminSeed').textContent); } catch (e) { users = []; }
   plansData = defaultPlans(); syncPriceMap();
   render();

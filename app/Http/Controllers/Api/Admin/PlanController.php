@@ -15,12 +15,17 @@ use Illuminate\Http\Request;
 class PlanController extends Controller
 {
     private array $rules = [
-        'name'        => ['required', 'string', 'max:40'],
-        'monthly'     => ['required', 'numeric', 'min:0', 'max:100000000'],
-        'yearly'      => ['required', 'numeric', 'min:0', 'max:100000000'],
-        'max_bytes'   => ['required', 'numeric', 'min:0'],
-        'expiry_days' => ['required', 'integer', 'min:1', 'max:36500'],
-        'branding'    => ['sometimes', 'boolean'],
+        'name'           => ['required', 'string', 'max:40'],
+        'tagline'        => ['sometimes', 'nullable', 'string', 'max:80'],
+        'monthly'        => ['required', 'numeric', 'min:0', 'max:100000000'],
+        'yearly'         => ['required', 'numeric', 'min:0', 'max:100000000'],
+        'max_bytes'      => ['required', 'numeric', 'min:0'],
+        'expiry_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:52560000'], // up to 100 years
+        'download_limit' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:1000000'],
+        'branding'       => ['sometimes', 'boolean'],
+        'popular'        => ['sometimes', 'boolean'],
+        'features'       => ['sometimes', 'array', 'max:20'],
+        'features.*'     => ['string', 'max:80'],
     ];
 
     public function index(): JsonResponse

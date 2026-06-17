@@ -17,7 +17,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // Stateless token API — no session/CSRF needed for /api/*.
+        // SPA cookie/session auth: treat same-origin frontend requests as
+        // stateful (session + CSRF) so /api/* can use the session cookie.
+        $middleware->statefulApi();
+
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
         ]);

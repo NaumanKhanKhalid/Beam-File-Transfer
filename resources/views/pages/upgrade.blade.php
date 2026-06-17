@@ -3,11 +3,9 @@
 @section('title', 'Upgrade')
 
 @php
-    $plans = [
-        'free'     => ['name' => 'Free',     'monthly' => 0,    'yearly' => 0,    'tagline' => 'For the occasional send',     'popular' => false, 'features' => ['2 GB per transfer', '7-day expiry', 'Email or link sharing', 'Up to 3 transfers at once']],
-        'pro'      => ['name' => 'Pro',      'monthly' => 749,  'yearly' => 599,  'tagline' => 'For freelancers & creators',  'popular' => true,  'features' => ['200 GB per transfer', '1-year expiry', 'Branded transfer pages', 'Password + delete-after-download', 'Live download tracking', 'Priority support']],
-        'business' => ['name' => 'Business', 'monthly' => 1899, 'yearly' => 1499, 'tagline' => 'For teams & studios',         'popular' => false, 'features' => ['1 TB per transfer', 'Unlimited expiry', 'Team rooms & shared spaces', 'Admin & member roles', 'Custom domain (files.you.com)', 'SSO + audit log']],
-    ];
+    // Plans are admin-editable (DB-backed via PlanRepo). Name, tagline, prices,
+    // "Most popular" flag and the feature bullets all come from there.
+    $plans = \App\Support\PlanRepo::all();
 @endphp
 
 @section('content')
@@ -51,8 +49,7 @@
 </div>
 
 {{-- Checkout (hidden until a paid plan is chosen) --}}
-@php $safepayOn = config('safepay.enabled'); @endphp
-<div id="checkoutView" data-safepay="{{ $safepayOn ? '1' : '0' }}" class="fade-in max-w-[860px] mx-auto px-4 sm:px-7 pt-9 pb-16 hidden">
+<div id="checkoutView" class="fade-in max-w-[860px] mx-auto px-4 sm:px-7 pt-9 pb-16 hidden">
     <button type="button" data-back class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-500 hover:text-ink-900 mb-5 transition-colors whitespace-nowrap"><span class="rotate-180"><x-icon name="chevR" class="w-4 h-4" /></span>Back to plans</button>
     <div class="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-6 items-start">
         <div class="bg-white border border-ink-100 rounded-2xl p-6 shadow-sm">
@@ -60,7 +57,6 @@
             <div class="flex flex-col gap-3.5">
                 <label class="flex flex-col gap-1.5"><span class="text-[13px] font-semibold text-ink-900">Email</span>
                     <input id="coEmail" type="email" placeholder="you@company.com" class="h-11 px-3.5 rounded-xl border border-ink-200 text-[15px] text-ink-900 bg-white outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/30 transition placeholder:text-ink-300"></label>
-              <div data-card-fields class="flex flex-col gap-3.5">
                 <label class="flex flex-col gap-1.5"><span class="text-[13px] font-semibold text-ink-900">Name on card</span>
                     <input id="coName" placeholder="Mara Lin" class="h-11 px-3.5 rounded-xl border border-ink-200 text-[15px] text-ink-900 bg-white outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/30 transition placeholder:text-ink-300"></label>
                 <label class="flex flex-col gap-1.5"><span class="text-[13px] font-semibold text-ink-900">Card number</span>
@@ -72,15 +68,9 @@
                     <label class="flex flex-col gap-1.5"><span class="text-[13px] font-semibold text-ink-900">CVC</span>
                         <input id="coCvc" inputmode="numeric" maxlength="4" placeholder="123" class="h-11 px-3.5 rounded-xl border border-ink-200 text-[15px] font-mono text-ink-900 bg-white outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/30 transition placeholder:text-ink-300"></label>
                 </div>
-              </div>
-              <div data-safepay-note class="hidden items-start gap-2.5 rounded-xl bg-brand-50 border border-brand-100 p-3.5 text-[13px] text-ink-600">
-                <span class="text-brand-500 flex-none mt-0.5"><x-icon name="shield" class="w-4 h-4" /></span>
-                <span>You’ll pay securely below with <b class="text-ink-900">Card, JazzCash, or Easypaisa</b> — without leaving this page.</span>
-              </div>
-              <div id="safepayMount" class="hidden mt-1 min-h-[120px]"></div>
             </div>
-            <button type="button" id="payBtn" class="mt-5 w-full h-[52px] rounded-full bg-spark-500 hover:bg-spark-600 active:translate-y-px text-ink-900 font-semibold text-[16px] flex items-center justify-center gap-2 transition"><x-icon name="shield" class="w-[18px] h-[18px]" /><span data-pay-label>Pay</span> <span data-pay-total>Rs 0</span></button>
-            <p data-pay-note class="text-[12px] text-ink-400 text-center mt-3">@if ($safepayOn) Secure payment via Safepay (Card / JazzCash / Easypaisa). @else Demo checkout — no real card is charged. Use 4242 4242 4242 4242. @endif</p>
+            <button type="button" id="payBtn" class="mt-5 w-full h-[52px] rounded-full bg-spark-500 hover:bg-spark-600 active:translate-y-px text-ink-900 font-semibold text-[16px] flex items-center justify-center gap-2 transition"><x-icon name="shield" class="w-[18px] h-[18px]" />Pay <span data-pay-total>Rs 0</span></button>
+            <p class="text-[12px] text-ink-400 text-center mt-3">Demo checkout — no real card is charged. Use 4242 4242 4242 4242.</p>
         </div>
         <div class="bg-ink-900 rounded-2xl p-6 text-white">
             <div class="text-[11px] font-semibold tracking-[.08em] uppercase text-ink-400 mb-3">Order summary</div>

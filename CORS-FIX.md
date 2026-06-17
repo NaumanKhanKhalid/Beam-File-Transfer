@@ -41,7 +41,7 @@ Copy `backend/config/cors.php` into your Laravel app at `config/cors.php`, then 
 'allowed_origins' => [
     'http://localhost:5500',   // ← must match the page's address bar exactly
 ],
-'supports_credentials' => false,   // Beam uses Bearer tokens, not cookies
+'supports_credentials' => true,    // Beam uses Sanctum cookie sessions (same origin)
 ```
 
 `http://localhost:5500` ≠ `http://127.0.0.1:5500` ≠ `http://localhost:5501`. Add whichever you actually use.

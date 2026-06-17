@@ -118,21 +118,23 @@ function maybeShowVerifyBanner(u) {
   if (document.getElementById('verifyBar')) return;
   const bar = document.createElement('div');
   bar.id = 'verifyBar';
-  bar.className = 'flex items-center gap-3 px-4 sm:px-7 py-2.5 bg-warning-50 border-b border-warning-200 text-ink-900 text-[13px]';
+  bar.className = 'flex items-center gap-3 px-4 sm:px-7 py-3 bg-warning-50 border-b border-warning-200 text-ink-900 text-[13px]';
   bar.innerHTML = `
-    <span class="w-7 h-7 rounded-lg bg-warning-500/20 text-warning-700 flex items-center justify-center flex-none">${ic('mail', 'w-4 h-4')}</span>
-    <span class="flex-1 min-w-0"><b class="font-semibold">Confirm your email</b> <span class="text-ink-500">to secure your account and get download alerts.</span></span>
-    <button type="button" data-verify-resend class="h-7 px-3 rounded-full bg-warning-500 text-white font-semibold whitespace-nowrap hover:brightness-105 transition flex-none">Resend</button>
-    <button type="button" data-verify-dismiss aria-label="Dismiss" class="w-7 h-7 flex items-center justify-center rounded-full text-ink-400 hover:bg-warning-500/15 transition flex-none">${ic('x', 'w-4 h-4')}</button>`;
+    <span class="w-8 h-8 rounded-full bg-warning-500 text-white flex items-center justify-center flex-none shadow-[0_2px_6px_rgba(245,165,36,.45)]">${ic('mail', 'w-[18px] h-[18px]')}</span>
+    <span class="flex-1 min-w-0 leading-snug"><b class="font-semibold text-ink-900">Confirm your email</b> <span class="text-ink-600">to secure your account and get download alerts.</span></span>
+    <button type="button" data-verify-resend class="h-8 px-4 rounded-full bg-ink-900 text-white font-semibold whitespace-nowrap hover:bg-ink-800 active:translate-y-px transition disabled:opacity-60 disabled:cursor-not-allowed flex-none">Resend email</button>
+    <button type="button" data-verify-dismiss aria-label="Dismiss" class="w-8 h-8 flex items-center justify-center rounded-full text-ink-400 hover:text-ink-700 hover:bg-ink-900/5 transition flex-none">${ic('x', 'w-4 h-4')}</button>`;
   const main = document.querySelector('main');
   const topbar = main?.querySelector('header');
   if (topbar && topbar.parentNode) topbar.parentNode.insertBefore(bar, topbar.nextSibling);
   else document.body.prepend(bar);
 
   bar.querySelector('[data-verify-resend]').addEventListener('click', async (e) => {
-    e.currentTarget.disabled = true;
-    try { await api.auth.resendVerification(); toast('Verification email sent — check your inbox.', 'success'); }
-    catch (err) { toast('Could not send the email right now.', 'danger'); }
+    const btn = e.currentTarget;
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Sending…';
+    try { await api.auth.resendVerification(); toast('Verification email sent — check your inbox.', 'success'); btn.textContent = 'Sent ✓'; }
+    catch (err) { toast('Could not send the email right now.', 'danger'); btn.disabled = false; btn.textContent = orig; }
   });
   bar.querySelector('[data-verify-dismiss]').addEventListener('click', () => {
     sessionStorage.setItem('beam.verifyDismissed', '1'); bar.remove();
@@ -174,8 +176,12 @@ function renderAccount(u) {
 
     region.querySelector('[data-logout]')?.addEventListener('click', async () => {
       try { await api.auth.logout(); } catch (e) { /* ignore */ }
-      // Clear cached identity/usage so the next load shows a clean guest state.
-      ['beam.cache.account', 'beam.cache.usage', 'beam.cache.nav', 'beam.cache.profile', 'beam.gateChoice'].forEach((k) => localStorage.removeItem(k));
+      // Clear cached identity/usage. If they've already spent their one-time guest
+      // pass, drop the gate choice so the (login-only) welcome gate returns;
+      // otherwise keep them as a smooth guest so it doesn't re-pop.
+      ['beam.cache.account', 'beam.cache.usage', 'beam.cache.nav', 'beam.cache.profile'].forEach((k) => localStorage.removeItem(k));
+      if (localStorage.getItem('beam.guestUsed') === '1') localStorage.removeItem('beam.gateChoice');
+      else localStorage.setItem('beam.gateChoice', 'guest');
       toast('Logged out.', 'brand');
       setTimeout(() => location.assign('/'), 400);
     });
@@ -258,6 +264,7 @@ export async function hydrateUsage() {
  */
 const GATE_KEY = 'beam.gateChoice';
 const GUEST_NAME_KEY = 'beam.guestName';
+const GUEST_USED_KEY = 'beam.guestUsed';   // one-time pass: set once a guest session is started
 
 function closeGate() { document.getElementById('beamGate')?.remove(); }
 
@@ -273,12 +280,13 @@ function showWelcomeGate() {
       </div>
       <div data-gate-step="choose">
         <h2 class="font-display font-bold text-white text-[24px] tracking-tight">Send big. Then it’s gone.</h2>
-        <p class="text-ink-300 text-sm mt-1.5 mb-6">Log in to track your transfers and rooms — or keep it quick and send as a guest.</p>
+        <p data-gate-sub class="text-ink-300 text-sm mt-1.5 mb-6">Log in to track your transfers and rooms — or keep it quick and send as a guest.</p>
         <div class="flex flex-col gap-2.5">
+          <a href="/auth/google/redirect" class="h-[52px] rounded-full bg-white hover:bg-ink-100 text-ink-900 font-semibold text-[15px] flex items-center justify-center gap-2.5 transition-colors"><svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.5 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-2 3.3-4.9 3.3-8.3z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.7c-1 .7-2.3 1.1-3.7 1.1-2.8 0-5.2-1.9-6.1-4.5H2.2v2.8A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.9 14.2a6.6 6.6 0 0 1 0-4.2V7.2H2.2a11 11 0 0 0 0 9.8l3.7-2.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3 .5 4.1 1.6l3.1-3.1A11 11 0 0 0 2.2 7.2L5.9 10c.9-2.6 3.3-4.5 6.1-4.5z"/></svg>Continue with Google</a>
           <a href="/login" class="h-[52px] rounded-full bg-spark-500 hover:bg-spark-600 text-ink-900 font-semibold text-[15px] flex items-center justify-center gap-2 transition-colors">Log in or sign up</a>
           <button type="button" data-gate-guest class="h-[52px] rounded-full bg-white/5 hover:bg-white/10 border border-ink-700 text-white font-semibold text-[15px] flex items-center justify-center gap-2 transition-colors">Continue as a guest</button>
         </div>
-        <p class="text-[12px] text-ink-500 text-center mt-4">Guests can send up to 2&nbsp;GB — no account needed.</p>
+        <p data-gate-foot class="text-[12px] text-ink-500 text-center mt-4">Guests can send up to 2&nbsp;GB — no account needed.</p>
       </div>
       <div data-gate-step="name" class="hidden">
         <h2 class="font-display font-bold text-white text-[24px] tracking-tight">What’s your name?</h2>
@@ -293,6 +301,15 @@ function showWelcomeGate() {
     </div>`;
   document.body.appendChild(el);
 
+  // One-time guest pass spent → the gate becomes login-only; guest is gone for good.
+  if (localStorage.getItem(GUEST_USED_KEY) === '1') {
+    el.querySelector('[data-gate-guest]')?.remove();
+    const sub = el.querySelector('[data-gate-sub]');
+    if (sub) sub.textContent = 'You’ve already used your one-time guest send. Log in or create a free account to keep sending.';
+    const foot = el.querySelector('[data-gate-foot]');
+    if (foot) foot.textContent = 'Free accounts are unlimited — and keep all your transfers in one place.';
+  }
+
   const step = (k) => {
     el.querySelector('[data-gate-step="choose"]').classList.toggle('hidden', k !== 'choose');
     el.querySelector('[data-gate-step="name"]').classList.toggle('hidden', k !== 'name');
@@ -303,6 +320,7 @@ function showWelcomeGate() {
     if (!name) { el.querySelector('#beamGateName').focus(); toast('Enter your name to continue.', 'danger'); return; }
     localStorage.setItem(GUEST_NAME_KEY, name);
     localStorage.setItem(GATE_KEY, 'guest');
+    localStorage.setItem(GUEST_USED_KEY, '1');   // burn the one-time guest pass
     const fromInput = document.getElementById('fromInput');   // sync the Send page field if present
     if (fromInput) fromInput.value = name;
     document.dispatchEvent(new CustomEvent('beam:guest-name', { detail: name }));
@@ -310,7 +328,7 @@ function showWelcomeGate() {
     toast(`Welcome, ${name.split(' ')[0]} 👋`, 'success');
   };
 
-  el.querySelector('[data-gate-guest]').addEventListener('click', () => {
+  el.querySelector('[data-gate-guest]')?.addEventListener('click', () => {
     const existing = localStorage.getItem(GUEST_NAME_KEY) || '';
     el.querySelector('#beamGateName').value = existing;
     step('name');
@@ -318,6 +336,36 @@ function showWelcomeGate() {
   el.querySelector('[data-gate-back]').addEventListener('click', () => step('choose'));
   el.querySelector('[data-gate-save]').addEventListener('click', save);
   el.querySelector('#beamGateName').addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+}
+
+/* ---- Admin route guard ---------------------------------------------------
+ * Admin pages render for NOBODY until we've confirmed the viewer is an admin.
+ * Guests are bounced to /login, signed-in non-admins back to the app. Content
+ * stays hidden (visibility) behind a “Checking access…” overlay until cleared,
+ * so a non-admin never even glimpses the admin UI.
+ */
+export async function requireAdmin() {
+  const bounce = (to, msg, tone) => {
+    try { sessionStorage.setItem('beam.flash', JSON.stringify({ msg, tone })); } catch (e) { /* ignore */ }
+    location.replace(to);
+  };
+  if (!api.authenticated) {
+    bounce('/login', 'Please log in as an admin to view that page.', 'brand');
+    return null;
+  }
+  try {
+    const u = await api.auth.me();
+    if (!u || !u.is_admin) {
+      bounce('/', 'Admins only — you don’t have access to that page.', 'danger');
+      return null;
+    }
+    document.getElementById('adminAccessCheck')?.remove();
+    document.querySelectorAll('[data-admin-content]').forEach((el) => { el.style.visibility = ''; });
+    return u;
+  } catch (e) {
+    bounce('/login', 'Please log in as an admin to view that page.', 'brand');
+    return null;
+  }
 }
 
 function initWelcomeGate() {
@@ -404,6 +452,11 @@ export function initMobileNav() {
 
 /* ---- Boot ---------------------------------------------------------------- */
 document.addEventListener('DOMContentLoaded', () => {
+  // Surface a one-shot flash message left by a redirect (e.g. admin guard).
+  try {
+    const f = JSON.parse(sessionStorage.getItem('beam.flash') || 'null');
+    if (f && f.msg) { sessionStorage.removeItem('beam.flash'); toast(f.msg, f.tone || 'brand'); }
+  } catch (e) { /* ignore */ }
   initTheme();
   hydrateAccount();
   hydrateUsage();

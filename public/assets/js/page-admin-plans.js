@@ -1,23 +1,61 @@
 /**
  * Admin → Plans page. Self-contained editor for the plan catalogue:
- * create, edit (name, prices, storage, expiry, branding) and delete plans.
- * Reads/writes via api.admin.* (DB-backed); falls back to local state in the
- * demo (not signed in).
+ * name, tagline, prices, storage (with unit), link expiry (with unit, incl.
+ * unlimited), per-transfer download limit, "Most popular" flag, custom branding,
+ * and an editable feature list (the bullets shown on the upgrade page).
+ * Reads/writes via api.admin.* (DB-backed); falls back to local state in demo.
  */
-import { api, ApiError, toast, ic } from './beam.js';
+import { api, ApiError, toast, ic, requireAdmin } from './beam.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const GB = 1024 * 1024 * 1024;
-let plansData = [];   // [{ key?, name, monthly, yearly, max_bytes, expiry_days, branding, _new?, _dirty? }]
+const UNIT = { MB: 1024 * 1024, GB: GB, TB: GB * 1024 };
+const EMIN = { minutes: 1, hours: 60, days: 1440 };
+let plansData = [];
+
+const attr = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+const round2 = (n) => Math.round(n * 100) / 100;
+
+function bestStorageUnit(b) { if (b >= UNIT.TB) return 'TB'; if (b >= UNIT.GB) return 'GB'; return 'MB'; }
+function bestExpiryUnit(min) {
+  if (min == null) return 'unlimited';
+  if (min >= EMIN.days && min % EMIN.days === 0) return 'days';
+  if (min >= EMIN.hours && min % EMIN.hours === 0) return 'hours';
+  return 'minutes';
+}
+
+/** Normalise an incoming plan into the editor's working shape. */
+function hydrate(p) {
+  const q = {
+    key: p.key,
+    name: p.name || '',
+    tagline: p.tagline || '',
+    monthly: +p.monthly || 0,
+    yearly: +p.yearly || 0,
+    max_bytes: +p.max_bytes || 0,
+    expiry_minutes: p.expiry_minutes == null ? null : +p.expiry_minutes,
+    download_limit: p.download_limit == null ? null : +p.download_limit,
+    branding: !!p.branding,
+    popular: !!p.popular,
+    features: Array.isArray(p.features) ? p.features.slice() : [],
+    _new: !!p._new,
+  };
+  q._su = bestStorageUnit(q.max_bytes);
+  q._eu = bestExpiryUnit(q.expiry_minutes);
+  return q;
+}
 
 function defaultPlans() {
   return [
-    { key: 'free',     name: 'Free',     monthly: 0,    yearly: 0,    max_bytes: 2 * GB,    expiry_days: 7,    branding: false },
-    { key: 'pro',      name: 'Pro',      monthly: 749,  yearly: 599,  max_bytes: 200 * GB,  expiry_days: 365,  branding: true },
-    { key: 'business', name: 'Business', monthly: 1899, yearly: 1499, max_bytes: 1024 * GB, expiry_days: 3650, branding: true },
-  ];
+    { key: 'free', name: 'Free', tagline: 'For the occasional send', monthly: 0, yearly: 0, max_bytes: 2 * GB, expiry_minutes: 7 * 1440, download_limit: 20, branding: false, popular: false,
+      features: ['2 GB per transfer', '7-day expiry', 'Email or link sharing', 'Up to 3 transfers at once', 'Up to 20 downloads per transfer'] },
+    { key: 'pro', name: 'Pro', tagline: 'For freelancers & creators', monthly: 749, yearly: 599, max_bytes: 200 * GB, expiry_minutes: 365 * 1440, download_limit: null, branding: true, popular: true,
+      features: ['200 GB per transfer', '1-year expiry', 'Branded transfer pages', 'Password + delete-after-download', 'Live download tracking', 'Unlimited downloads', 'Priority support'] },
+    { key: 'business', name: 'Business', tagline: 'For teams & studios', monthly: 1899, yearly: 1499, max_bytes: 1024 * GB, expiry_minutes: null, download_limit: null, branding: true, popular: false,
+      features: ['1 TB per transfer', 'Unlimited expiry', 'Admin & member roles', 'Custom domain (files.you.com)', 'Unlimited downloads', 'SSO + audit log'] },
+  ].map(hydrate);
 }
-function plansFromApi(obj) { return Object.entries(obj || {}).map(([key, v]) => ({ key, ...v })); }
+function plansFromApi(obj) { return Object.entries(obj || {}).map(([key, v]) => hydrate({ key, ...v })); }
 
 /* ---- Confirm dialog ------------------------------------------------------ */
 function confirmAction({ title, body, confirmLabel = 'Confirm' }) {
@@ -43,90 +81,188 @@ function confirmAction({ title, body, confirmLabel = 'Confirm' }) {
 }
 
 /* ---- Render -------------------------------------------------------------- */
+const numInput = (pi, key, val, suffix, icon) =>
+  `<label class="flex items-center justify-between gap-2 py-2">
+    <span class="flex items-center gap-2 text-[13px] text-ink-600">${icon ? `<span class="text-ink-300">${ic(icon, 'w-4 h-4')}</span>` : ''}${key.label}</span>
+    <span class="flex items-center gap-1.5">
+      <input data-pf="${pi}:${key.f}" value="${attr(val)}" inputmode="decimal" placeholder="${attr(key.ph || '')}"
+        class="w-[72px] h-9 px-2.5 text-right rounded-lg border border-ink-200 text-[13px] font-mono font-semibold text-ink-900 bg-white outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20 transition">
+      ${suffix}
+    </span>
+  </label>`;
+
+const unitSelect = (pi, f, current, opts) =>
+  `<select data-pf="${pi}:${f}" class="h-9 px-1.5 rounded-lg border border-ink-200 text-[11px] font-semibold text-ink-600 bg-white outline-none focus:border-brand-500 transition">
+    ${opts.map((o) => `<option value="${o[0]}" ${o[0] === current ? 'selected' : ''}>${o[1]}</option>`).join('')}
+  </select>`;
+
 function render() {
   const host = $('#adminPlans');
   if (!host) return;
-  const row = (pi, key, label, val, suffix = '', icon = null) =>
-    `<label class="flex items-center justify-between gap-2 py-2">
-      <span class="flex items-center gap-2 text-[13px] text-ink-600">${icon ? `<span class="text-ink-300">${ic(icon, 'w-4 h-4')}</span>` : ''}${label}</span>
-      <span class="flex items-center gap-1.5">
-        <input data-pf="${pi}:${key}" value="${val}" inputmode="decimal"
-          class="w-[84px] h-9 px-2.5 text-right rounded-lg border border-ink-200 text-[13px] font-mono font-semibold text-ink-900 bg-white outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20 transition">
-        <span class="text-[11px] text-ink-400 w-9">${suffix}</span>
-      </span>
-    </label>`;
+
   host.innerHTML = plansData.map((p, pi) => {
     const branded = !!p.branding;
-    // Tier accent: branded plans get a lime chip + brand ring; free is neutral.
-    const ring = branded ? 'ring-1 ring-brand-500/30' : '';
+    const ring = p.popular ? 'ring-1 ring-brand-500/40' : (branded ? 'ring-1 ring-brand-500/15' : '');
     const chip = branded ? 'bg-spark-500 text-ink-900' : 'bg-white/10 text-spark-500';
     const tierIcon = branded ? 'crown' : 'shield';
-    const yearlySave = p.monthly > 0 && p.yearly > 0 && p.yearly < p.monthly
-      ? Math.round((1 - p.yearly / p.monthly) * 100) : 0;
+    const yearlySave = p.monthly > 0 && p.yearly > 0 && p.yearly < p.monthly ? Math.round((1 - p.yearly / p.monthly) * 100) : 0;
+
+    const storageVal = round2(p.max_bytes / UNIT[p._su]);
+    const storageSuffix = unitSelect(pi, 'su', p._su, [['MB', 'MB'], ['GB', 'GB'], ['TB', 'TB']]);
+    const isUnlimited = p._eu === 'unlimited';
+    const expiryVal = isUnlimited ? '' : Math.round(p.expiry_minutes / EMIN[p._eu]);
+    const expirySuffix = unitSelect(pi, 'eu', p._eu, [['minutes', 'min'], ['hours', 'hrs'], ['days', 'days'], ['unlimited', '∞']]);
+
+    const toggle = (f, on, label, icon) =>
+      `<label class="flex items-center justify-between gap-2 py-2.5">
+        <span class="flex items-center gap-2 text-[13px] text-ink-600"><span class="text-ink-300">${ic(icon, 'w-4 h-4')}</span>${label}</span>
+        <button type="button" data-plan-toggle="${pi}:${f}" class="w-10 h-6 rounded-full transition-colors relative ${on ? 'bg-brand-500' : 'bg-ink-200'}">
+          <span class="absolute top-0.5 ${on ? 'left-[18px]' : 'left-0.5'} w-5 h-5 rounded-full bg-white shadow transition-all"></span>
+        </button>
+      </label>`;
+
+    const features = (p.features || []).map((f, fi) =>
+      `<div class="flex items-center gap-1.5">
+        <span class="text-success-500 flex-none">${ic('check', 'w-3.5 h-3.5')}</span>
+        <input data-pf="${pi}:feat:${fi}" value="${attr(f)}" placeholder="Feature line"
+          class="flex-1 min-w-0 h-8 px-2.5 rounded-lg border border-ink-200 text-[12.5px] text-ink-700 bg-white outline-none focus:border-brand-500 transition">
+        <button type="button" data-feat-del="${pi}:${fi}" aria-label="Remove feature" class="w-7 h-7 flex items-center justify-center rounded-lg text-ink-300 hover:text-danger-500 hover:bg-danger-500/10 transition flex-none">${ic('x', 'w-3.5 h-3.5')}</button>
+      </div>`).join('');
+
     return `<div data-plan-card="${pi}" class="rounded-2xl border border-ink-150 ${ring} bg-white overflow-hidden shadow-sm flex flex-col">
       <div class="bg-ink-900 px-4 py-3.5 flex items-center gap-2.5">
         <span class="w-8 h-8 rounded-lg ${chip} flex items-center justify-center flex-none">${ic(tierIcon, 'w-[16px] h-[16px]')}</span>
-        <input data-pf="${pi}:name" value="${p.name}" placeholder="Plan name"
+        <input data-pf="${pi}:name" value="${attr(p.name)}" placeholder="Plan name"
           class="flex-1 min-w-0 font-display font-bold text-[16px] text-white bg-transparent border-b border-transparent hover:border-white/20 focus:border-spark-500 outline-none transition pb-0.5 placeholder:text-ink-500">
         <button type="button" data-plan-del="${pi}" aria-label="Delete plan" class="w-8 h-8 flex items-center justify-center rounded-full text-ink-400 hover:bg-danger-500/15 hover:text-danger-400 transition-colors flex-none">${ic('trash', 'w-[15px] h-[15px]')}</button>
       </div>
 
       <div class="p-4 flex flex-col flex-1">
+        <input data-pf="${pi}:tagline" value="${attr(p.tagline)}" placeholder="Short tagline"
+          class="w-full text-[12px] text-ink-500 bg-transparent border-b border-transparent hover:border-ink-200 focus:border-brand-500 outline-none transition pb-1 mb-2 placeholder:text-ink-300">
+
         <div class="flex items-baseline gap-1.5 pb-3 mb-1 border-b border-ink-100">
           <span class="font-display font-bold text-[26px] text-ink-900 tracking-tight">${p.monthly > 0 ? '₹' + p.monthly : 'Free'}</span>
           ${p.monthly > 0 ? '<span class="text-[13px] text-ink-400">/mo</span>' : ''}
           ${yearlySave ? `<span class="ml-auto text-[11px] font-bold text-success-700 bg-success-50 px-2 py-0.5 rounded-full">Save ${yearlySave}% yearly</span>` : ''}
         </div>
 
-        ${row(pi, 'monthly', 'Monthly price', p.monthly, '₹', 'zap')}
-        ${row(pi, 'yearly', 'Yearly price', p.yearly, '₹/mo', 'crown')}
-        ${row(pi, 'gb', 'Storage', Math.round((p.max_bytes / GB) * 10) / 10, 'GB', 'inbox')}
-        ${row(pi, 'expiry_days', 'Link expiry', p.expiry_days, 'days', 'clock')}
+        ${numInput(pi, { f: 'monthly', label: 'Monthly price' }, p.monthly, '<span class="text-[11px] text-ink-400 w-9 text-center">₹</span>', 'zap')}
+        ${numInput(pi, { f: 'yearly', label: 'Yearly price' }, p.yearly, '<span class="text-[11px] text-ink-400 w-9 text-center">₹/mo</span>', 'crown')}
+        ${numInput(pi, { f: 'sv', label: 'Storage' }, storageVal, storageSuffix, 'inbox')}
+        ${numInput(pi, { f: 'ev', label: 'Link expiry', ph: isUnlimited ? '∞' : '' }, expiryVal, expirySuffix, 'clock')}
+        ${numInput(pi, { f: 'dl', label: 'Download limit', ph: '∞' }, p.download_limit == null ? '' : p.download_limit, '<span class="text-[11px] text-ink-400 w-9 text-center">/file</span>', 'download')}
 
-        <label class="flex items-center justify-between gap-2 py-2.5 mt-1 border-t border-ink-100">
-          <span class="flex items-center gap-2 text-[13px] text-ink-600"><span class="text-ink-300">${ic('palette', 'w-4 h-4')}</span>Custom branding</span>
-          <button type="button" data-plan-brand="${pi}" class="w-10 h-6 rounded-full transition-colors relative ${branded ? 'bg-brand-500' : 'bg-ink-200'}">
-            <span class="absolute top-0.5 ${branded ? 'left-[18px]' : 'left-0.5'} w-5 h-5 rounded-full bg-white shadow transition-all"></span>
-          </button>
-        </label>
+        ${toggle('branding', branded, 'Custom branding', 'palette')}
+        ${toggle('popular', p.popular, 'Most popular', 'zap')}
 
-        <button type="button" data-plan-save="${pi}" class="mt-auto pt-0 h-10 rounded-xl text-[13px] font-semibold transition-colors ${p._dirty || p._new ? 'bg-spark-500 hover:bg-spark-600 text-ink-900' : 'bg-ink-100 text-ink-400 cursor-not-allowed'}">${p._new ? 'Create plan' : (p._dirty ? 'Save changes' : 'Saved')}</button>
+        <div class="mt-2 pt-3 border-t border-ink-100">
+          <div class="text-[11px] font-semibold tracking-[.06em] uppercase text-ink-400 mb-2">Features</div>
+          <div class="flex flex-col gap-1.5">${features}</div>
+          <button type="button" data-feat-add="${pi}" class="mt-2 flex items-center gap-1.5 text-[12.5px] font-semibold text-brand-600 hover:text-brand-700 transition-colors">${ic('plus', 'w-3.5 h-3.5')}Add feature</button>
+        </div>
+
+        <button type="button" data-plan-save="${pi}" class="mt-4 h-10 rounded-xl text-[13px] font-semibold transition-colors ${p._dirty || p._new ? 'bg-spark-500 hover:bg-spark-600 text-ink-900' : 'bg-ink-100 text-ink-400 cursor-not-allowed'}">${p._new ? 'Create plan' : (p._dirty ? 'Save changes' : 'Saved')}</button>
       </div>
     </div>`;
   }).join('');
 
-  host.querySelectorAll('[data-pf]').forEach((inp) => {
+  wire();
+}
+
+/** Flip the save button to a dirty state without a full re-render (keeps focus). */
+function markDirty(pi) {
+  const p = plansData[pi]; if (!p) return;
+  p._dirty = true;
+  const btn = $(`[data-plan-save="${pi}"]`);
+  if (btn) { btn.className = 'mt-4 h-10 rounded-xl text-[13px] font-semibold transition-colors bg-spark-500 hover:bg-spark-600 text-ink-900'; btn.textContent = p._new ? 'Create plan' : 'Save changes'; }
+}
+
+function wire() {
+  const host = $('#adminPlans');
+
+  host.querySelectorAll('input[data-pf]').forEach((inp) => {
     inp.addEventListener('input', () => {
-      const [pi, f] = inp.dataset.pf.split(':');
+      const [pi, f, fi] = inp.dataset.pf.split(':');
       const p = plansData[+pi]; if (!p) return;
       if (f === 'name') p.name = inp.value;
-      else if (f === 'gb') p.max_bytes = Math.round((parseFloat(inp.value) || 0) * GB);
-      else if (f === 'expiry_days') p.expiry_days = Math.max(1, Math.round(parseFloat(inp.value) || 1));
-      else p[f] = parseFloat(inp.value) || 0;
-      p._dirty = true;
-      const btn = $(`[data-plan-save="${pi}"]`);
-      if (btn) btn.className = 'mt-2 h-9 rounded-full text-[13px] font-semibold transition-colors bg-spark-500 hover:bg-spark-600 text-ink-900';
+      else if (f === 'tagline') p.tagline = inp.value;
+      else if (f === 'monthly') p.monthly = parseFloat(inp.value) || 0;
+      else if (f === 'yearly') p.yearly = parseFloat(inp.value) || 0;
+      else if (f === 'sv') p.max_bytes = Math.round((parseFloat(inp.value) || 0) * UNIT[p._su]);
+      else if (f === 'ev') { if (p._eu !== 'unlimited') p.expiry_minutes = Math.max(1, Math.round((parseFloat(inp.value) || 1) * EMIN[p._eu])); }
+      else if (f === 'dl') { const n = parseInt(inp.value, 10); p.download_limit = (inp.value === '' || isNaN(n) || n <= 0) ? null : n; }
+      else if (f === 'feat') p.features[+fi] = inp.value;
+      markDirty(+pi);
     });
   });
-  host.querySelectorAll('[data-plan-brand]').forEach((b) => b.addEventListener('click', () => {
-    const p = plansData[+b.dataset.planBrand]; p.branding = !p.branding; p._dirty = true; render();
+
+  // Unit selects (storage / expiry) — recompute from the live value, then re-render.
+  host.querySelectorAll('select[data-pf]').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      const [pi, f] = sel.dataset.pf.split(':');
+      const p = plansData[+pi]; if (!p) return;
+      if (f === 'su') {
+        const v = parseFloat($(`[data-pf="${pi}:sv"]`)?.value) || 0;
+        p._su = sel.value; p.max_bytes = Math.round(v * UNIT[sel.value]);
+      } else if (f === 'eu') {
+        p._eu = sel.value;
+        if (sel.value === 'unlimited') p.expiry_minutes = null;
+        else {
+          const cur = parseFloat($(`[data-pf="${pi}:ev"]`)?.value) || (p.expiry_minutes ? p.expiry_minutes / EMIN[sel.value] : 7);
+          p.expiry_minutes = Math.max(1, Math.round(cur * EMIN[sel.value]));
+        }
+      }
+      p._dirty = true; render();
+    });
+  });
+
+  host.querySelectorAll('[data-plan-toggle]').forEach((b) => b.addEventListener('click', () => {
+    const [pi, f] = b.dataset.planToggle.split(':');
+    const p = plansData[+pi]; if (!p) return;
+    p[f] = !p[f]; p._dirty = true; render();
+  }));
+  host.querySelectorAll('[data-feat-add]').forEach((b) => b.addEventListener('click', () => {
+    const p = plansData[+b.dataset.featAdd]; if (!p) return;
+    p.features.push(''); p._dirty = true; render();
+    const inputs = $(`[data-plan-card="${b.dataset.featAdd}"]`).querySelectorAll('[data-pf$=":' + (p.features.length - 1) + '"]');
+  }));
+  host.querySelectorAll('[data-feat-del]').forEach((b) => b.addEventListener('click', () => {
+    const [pi, fi] = b.dataset.featDel.split(':');
+    const p = plansData[+pi]; if (!p) return;
+    p.features.splice(+fi, 1); p._dirty = true; render();
   }));
   host.querySelectorAll('[data-plan-save]').forEach((b) => b.addEventListener('click', () => savePlan(+b.dataset.planSave)));
   host.querySelectorAll('[data-plan-del]').forEach((b) => b.addEventListener('click', () => deletePlan(+b.dataset.planDel)));
 }
 
 function addPlan() {
-  plansData.push({ name: '', monthly: 0, yearly: 0, max_bytes: 10 * GB, expiry_days: 30, branding: false, _new: true });
+  plansData.push(hydrate({ name: '', tagline: '', monthly: 0, yearly: 0, max_bytes: 10 * GB, expiry_minutes: 30 * 1440, download_limit: null, branding: false, popular: false, features: [], _new: true }));
   render();
   const cards = $('#adminPlans').querySelectorAll('[data-plan-card]');
   cards[cards.length - 1]?.querySelector('[data-pf$=":name"]')?.focus();
+}
+
+function payloadFor(p) {
+  return {
+    name: p.name.trim(),
+    tagline: (p.tagline || '').trim(),
+    monthly: p.monthly,
+    yearly: p.yearly,
+    max_bytes: p.max_bytes,
+    expiry_minutes: p.expiry_minutes,   // null = unlimited
+    download_limit: p.download_limit,   // null = unlimited
+    branding: !!p.branding,
+    popular: !!p.popular,
+    features: (p.features || []).map((f) => String(f).trim()).filter(Boolean),
+  };
 }
 
 async function savePlan(pi) {
   const p = plansData[pi]; if (!p) return;
   if (!p._dirty && !p._new) return;
   if (!String(p.name).trim()) { toast('Give the plan a name.', 'danger'); return; }
-  const payload = { name: p.name.trim(), monthly: p.monthly, yearly: p.yearly, max_bytes: p.max_bytes, expiry_days: p.expiry_days, branding: !!p.branding };
+  const payload = payloadFor(p);
   try {
     const r = p._new ? await api.admin.createPlan(payload) : await api.admin.updatePlan(p.key, payload);
     if (r && r.plans) plansData = plansFromApi(r.plans);
@@ -154,6 +290,7 @@ async function deletePlan(pi) {
 
 /* ---- Boot ---------------------------------------------------------------- */
 document.addEventListener('DOMContentLoaded', async () => {
+  if (!(await requireAdmin())) return;   // admins only — guard bounces everyone else
   plansData = defaultPlans();
   render();
   $('[data-plan-add]')?.addEventListener('click', addPlan);

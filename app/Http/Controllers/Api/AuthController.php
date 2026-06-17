@@ -9,57 +9,52 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    /** POST /api/register */
+    /** POST /api/register — create the account and start a session (cookie auth). */
     public function register(RegisterRequest $request): JsonResponse
     {
         $user = User::create($request->validated() + ['plan' => 'free']);
 
-        // Fire a verification email (non-blocking — the user still gets a token).
+        // Fire a verification email (non-blocking).
         \App\Http\Controllers\Api\EmailVerificationController::send($user);
 
-        return $this->withToken($user, 201);
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return response()->json(['user' => new UserResource($user)], 201);
     }
 
-    /** POST /api/login */
+    /** POST /api/login — verify credentials and start a session (cookie auth). */
     public function login(LoginRequest $request): JsonResponse
     {
-        $user = User::where('email', $request->email)->first();
-
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (! Auth::attempt($request->only('email', 'password'), true)) {
             throw ValidationException::withMessages([
                 'email' => ['These credentials do not match our records.'],
             ]);
         }
 
-        return $this->withToken($user);
+        $request->session()->regenerate();
+
+        return response()->json(['user' => new UserResource(Auth::user())]);
     }
 
-    /** GET /api/me  (auth:sanctum) */
+    /** GET /api/me  (auth:sanctum — session for the SPA) */
     public function me(Request $request): UserResource
     {
         return new UserResource($request->user()->load('subscription'));
     }
 
-    /** POST /api/logout  (auth:sanctum) */
+    /** POST /api/logout — end the session and clear the cookie. */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return response()->json(['message' => 'Logged out.']);
-    }
-
-    private function withToken(User $user, int $status = 200): JsonResponse
-    {
-        $token = $user->createToken('beam-spa')->plainTextToken;
-
-        return response()->json([
-            'token' => $token,
-            'user'  => new UserResource($user),
-        ], $status);
     }
 }

@@ -9,12 +9,12 @@
  *   const { user } = await api.auth.login('mara@studio.co', 'password');
  *   const transfer = await api.transfers.create({ files, expiry: '7d' });
  *
- * The token is persisted to localStorage and attached as a Bearer header
- * automatically. Every method throws `ApiError` on a non-2xx response.
+ * The session lives in an HttpOnly cookie set by the server on login; the
+ * client sends it automatically (credentials: 'include') and attaches the
+ * CSRF token from the <meta name="csrf-token"> tag. Every method throws
+ * `ApiError` on a non-2xx response.
  * --------------------------------------------------------------------------
  */
-
-const TOKEN_KEY = 'beam.token';
 
 export function httpErrorMessage(status) {
   switch (status) {
@@ -48,7 +48,11 @@ export class ApiError extends Error {
 class BeamApi {
   constructor() {
     this.baseUrl = '/api';
-    this.token = (typeof localStorage !== 'undefined' && localStorage.getItem(TOKEN_KEY)) || null;
+    // Cookie/session auth: the server sets an HttpOnly session cookie on login.
+    // The client can't read that cookie, so it learns “am I signed in?” from a
+    // server-rendered <meta name="auth-user"> tag (base64 JSON; empty for guests).
+    this.user = this._readAuthUser();
+    this.csrf = this._meta('csrf-token');
   }
 
   /** Call once at startup. */
@@ -57,12 +61,19 @@ class BeamApi {
     return this;
   }
 
-  get authenticated() { return !!this.token; }
+  get authenticated() { return !!this.user; }
 
-  setToken(token) {
-    this.token = token;
-    if (typeof localStorage === 'undefined') return;
-    token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY);
+  /** Back-compat: callers pass null on logout / 401 to clear the local session. */
+  setToken(v) { if (!v) this.user = null; }
+  setUser(u)  { this.user = u || null; }
+
+  _meta(name) {
+    return (typeof document !== 'undefined' && document.querySelector(`meta[name="${name}"]`)?.content) || '';
+  }
+  _readAuthUser() {
+    const raw = this._meta('auth-user');
+    if (!raw) return null;
+    try { return JSON.parse(atob(raw)); } catch (e) { return null; }
   }
 
   /** Low-level request. `body` may be a plain object (JSON) or FormData. */
@@ -71,7 +82,8 @@ class BeamApi {
     if (query) Object.entries(query).forEach(([k, v]) => v != null && url.searchParams.set(k, v));
 
     const headers = { Accept: 'application/json' };
-    if (auth && this.token) headers.Authorization = `Bearer ${this.token}`;
+    // Same-origin cookie/session auth + CSRF token for state-changing requests.
+    if (method !== 'GET' && this.csrf) headers['X-CSRF-TOKEN'] = this.csrf;
 
     let payload;
     if (body instanceof FormData) {
@@ -83,7 +95,7 @@ class BeamApi {
 
     let res;
     try {
-      res = await fetch(url, { method, headers, body: payload });
+      res = await fetch(url, { method, headers, body: payload, credentials: 'include' });
     } catch (e) {
       throw new ApiError('Network error — is the API running?', { status: 0 });
     }
@@ -107,12 +119,12 @@ class BeamApi {
   // ---- Auth ---------------------------------------------------------------
   auth = {
     register: async (name, email, password) => {
-      const r = await this.post('/register', { name, email, password }, { auth: false });
-      this.setToken(r.token); return r;
+      const r = await this.post('/register', { name, email, password });
+      this.setUser(r.user); return r;
     },
     login: async (email, password) => {
-      const r = await this.post('/login', { email, password }, { auth: false });
-      this.setToken(r.token); return r;
+      const r = await this.post('/login', { email, password });
+      this.setUser(r.user); return r;
     },
     me: async () => { const r = await this.get('/me'); return (r && r.data) ? r.data : r; },
     logout: async () => { try { await this.post('/logout'); } finally { this.setToken(null); } },
@@ -145,12 +157,11 @@ class BeamApi {
 
   // ---- Subscriptions ------------------------------------------------------
   plans = () => this.get('/plans', { auth: false });
-  usage = () => this.get('/usage');   // sends bearer if signed in; metered by IP for guests
+  usage = () => this.get('/usage');   // session user if signed in; metered by IP for guests
   subscription = {
     current: () => this.get('/subscription'),
     checkout: (plan, billing_cycle, payment_token) =>
       this.post('/subscription/checkout', { plan, billing_cycle, payment_token }),
-    activate: (subscription_id) => this.post('/subscription/activate', { subscription_id }),
     cancel: () => this.del('/subscription'),
   };
 
@@ -216,8 +227,9 @@ class BeamApi {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', this.baseUrl + path);
+      xhr.withCredentials = true;
       xhr.setRequestHeader('Accept', 'application/json');
-      if (this.token) xhr.setRequestHeader('Authorization', `Bearer ${this.token}`);
+      if (this.csrf) xhr.setRequestHeader('X-CSRF-TOKEN', this.csrf);
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
@@ -298,7 +310,8 @@ class BeamApi {
     try {
       const res = await fetch(this.baseUrl + '/uploads/chunk', {
         method: 'POST',
-        headers: this.token ? { Authorization: `Bearer ${this.token}`, Accept: 'application/json' } : { Accept: 'application/json' },
+        credentials: 'include',
+        headers: this.csrf ? { 'X-CSRF-TOKEN': this.csrf, Accept: 'application/json' } : { Accept: 'application/json' },
         body: fd,
       });
       const data = await res.json().catch(() => ({}));

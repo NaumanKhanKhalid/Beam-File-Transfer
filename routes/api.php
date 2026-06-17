@@ -16,8 +16,9 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | Beam API routes  (prefixed with /api by the framework)
 |--------------------------------------------------------------------------
-| Auth: Laravel Sanctum personal-access tokens.
-| Send the token as:  Authorization: Bearer <token>
+| Auth: Laravel Sanctum stateful **cookie sessions** (same-origin SPA).
+| Login/register set an HttpOnly session cookie; the browser sends it
+| automatically. Writes include the X-CSRF-TOKEN header.
 */
 
 // ---- Public ---------------------------------------------------------------
@@ -31,10 +32,6 @@ Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 've
     ->middleware('signed')->name('verification.verify');
 
 Route::get('/plans',     [SubscriptionController::class, 'plans']);
-
-// Safepay returns the user here after checkout, and posts here server-to-server.
-Route::get('/subscription/callback', [SubscriptionController::class, 'callback']);
-Route::post('/subscription/webhook', [SubscriptionController::class, 'webhook']);
 
 // Storage usage / quota for the current sender (guest by IP, or signed-in user).
 Route::get('/usage',     [UsageController::class, 'show']);
@@ -69,7 +66,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/subscription',           [SubscriptionController::class, 'current']);
     Route::post('/subscription/checkout', [SubscriptionController::class, 'checkout']);
-    Route::post('/subscription/activate', [SubscriptionController::class, 'activate']);
     Route::delete('/subscription',        [SubscriptionController::class, 'cancel']);
 
     // ---- Admin only -------------------------------------------------------

@@ -333,7 +333,8 @@ async function doSend() {
   } catch (e) {
     restoreDeliverForm({ resetState: false });   // keep files + options for a retry
     updateSend();
-    if (e instanceof ApiError && (e.code === 'guest_quota_exceeded' || e.code === 'quota_exceeded')) {
+    if (e instanceof ApiError && (e.code === 'guest_used' || e.code === 'guest_quota_exceeded' || e.code === 'quota_exceeded')) {
+      if (e.code === 'guest_used') { try { localStorage.setItem('beam.guestUsed', '1'); localStorage.removeItem('beam.gateChoice'); } catch (_) {} }
       promptRegister(e.first);                          // limit hit server-side
     } else {
       toast(e instanceof ApiError ? e.first : (e?.message || 'Could not reach the API — is the server running?'), 'danger');

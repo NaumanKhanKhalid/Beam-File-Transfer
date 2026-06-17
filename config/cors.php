@@ -5,9 +5,9 @@
  * --------------------------------------------------------------------------
  * Copy this to your Laravel app at: config/cors.php
  *
- * Beam uses BEARER TOKEN auth (Authorization header), NOT cookies — so
- * `supports_credentials` stays FALSE and you only need to allow your
- * frontend origin(s) for the /api/* paths.
+ * Beam uses Sanctum COOKIE/SESSION auth (same-origin SPA), so
+ * `supports_credentials` is TRUE and the session + CSRF cookies are sent.
+ * List every frontend origin under `allowed_origins`.
  *
  * IMPORTANT: an "origin" is scheme + host + port, e.g. http://localhost:5500
  * It must match EXACTLY. Opening the HTML as a file:// URL sends Origin "null"
@@ -46,8 +46,7 @@ return [
     // Cache the preflight (OPTIONS) response, in seconds.
     'max_age' => 0,
 
-    // FALSE because we use Bearer tokens, not cookies.
-    // Set TRUE only if you switch to Sanctum cookie/session SPA auth.
-    'supports_credentials' => false,
+    // TRUE so the browser sends the Sanctum session + CSRF cookies.
+    'supports_credentials' => true,
 
 ];

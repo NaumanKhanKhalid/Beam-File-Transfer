@@ -7,15 +7,21 @@ use Illuminate\Database\Eloquent\Model;
 class Plan extends Model
 {
     protected $fillable = [
-        'key', 'name', 'monthly', 'yearly', 'max_bytes', 'expiry_days', 'branding', 'sort',
+        'key', 'name', 'tagline', 'monthly', 'yearly', 'max_bytes',
+        'expiry_minutes', 'expiry_days', 'download_limit',
+        'branding', 'popular', 'features', 'sort',
     ];
 
     protected $casts = [
-        'monthly'     => 'int',
-        'yearly'      => 'int',
-        'max_bytes'   => 'int',
-        'expiry_days' => 'int',
-        'branding'    => 'bool',
-        'sort'        => 'int',
+        'monthly'        => 'int',
+        'yearly'         => 'int',
+        'max_bytes'      => 'int',
+        'expiry_minutes' => 'int',
+        'expiry_days'    => 'int',
+        'download_limit' => 'int',
+        'branding'       => 'bool',
+        'popular'        => 'bool',
+        'features'       => 'array',
+        'sort'           => 'int',
     ];
 }

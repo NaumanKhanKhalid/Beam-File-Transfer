@@ -54,12 +54,18 @@ Set `config/cors.php` `paths` to include `api/*` and `allowed_origins` to your f
 
 ## 2. Auth model
 
-Stateless **bearer tokens**. Register/login return `{ token, user }`. Send the token on every protected request:
+Sanctum stateful **cookie sessions** (same-origin SPA). Register/login call `Auth::login()`
+and set an HttpOnly session cookie; the browser sends it automatically. Send the page's
+CSRF token on writes and include credentials:
 
 ```
-Authorization: Bearer 3|xxxxxxialong...token
+X-CSRF-TOKEN: <meta name="csrf-token">
 Accept: application/json
+# fetch(..., { credentials: 'include' })
 ```
+
+Register/login return `{ user }` (no token). `config/sanctum.php` `stateful` must list your
+host; `config/cors.php` `supports_credentials => true`.
 
 ---
 
@@ -67,10 +73,10 @@ Accept: application/json
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/api/register` | — | Create account → `{token,user}` |
-| POST | `/api/login` | — | Log in → `{token,user}` |
-| GET | `/api/me` | token | Current user (+ subscription) |
-| POST | `/api/logout` | token | Revoke current token |
+| POST | `/api/register` | — | Create account → `{user}` (sets session cookie) |
+| POST | `/api/login` | — | Log in → `{user}` (sets session cookie) |
+| GET | `/api/me` | session | Current user (+ subscription) |
+| POST | `/api/logout` | session | End the session |
 | GET | `/api/plans` | — | Plan catalogue + pricing |
 | POST | `/api/transfers` | optional | Create transfer (multipart: `files[]`, `title`, `message`, `recipients[]`, `expiry`, `password`, `burn`, `notify`, `branded`) |
 | GET | `/api/transfers` | token | List my sent transfers (paginated) |

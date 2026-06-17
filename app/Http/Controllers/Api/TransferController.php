@@ -7,6 +7,7 @@ use App\Http\Requests\StoreTransferRequest;
 use App\Http\Resources\TransferResource;
 use App\Mail\TransferDownloadedMail;
 use App\Mail\TransferReadyMail;
+use App\Models\GuestPass;
 use App\Models\Transfer;
 use App\Support\Quota;
 use Illuminate\Http\JsonResponse;
@@ -63,6 +64,9 @@ class TransferController extends Controller
         $files = $request->file('files');
         $paths = $request->input('paths', []);   // optional folder-relative names, aligned with $files
 
+        // One-time guest pass: a guest may send only once per IP, ever.
+        if (! $user && $resp = $this->guestPassGuard($request)) return $resp;
+
         // Reject if this upload would push the sender over their quota.
         $incoming = collect($files)->sum(fn ($f) => $f->getSize());
         if ($resp = $this->quotaGuard($request, $user, $incoming)) return $resp;
@@ -83,6 +87,7 @@ class TransferController extends Controller
             $total += $file->getSize();
         }
         $transfer->update(['total_bytes' => $total]);
+        if (! $user) GuestPass::burn($request->ip());   // spend the one-time guest pass
         $this->notifyRecipients($transfer, $request->input('password'));
 
         return (new TransferResource($transfer->load('files')))
@@ -106,6 +111,9 @@ class TransferController extends Controller
 
         $user = auth('sanctum')->user();
         $dir  = "chunks/{$data['upload_id']}";
+
+        // One-time guest pass: a guest may send only once per IP, ever.
+        if (! $user && $resp = $this->guestPassGuard($request)) { Storage::deleteDirectory($dir); return $resp; }
 
         // Verify every assembled part exists, and total their sizes for the quota.
         $specs = [];
@@ -138,6 +146,7 @@ class TransferController extends Controller
         }
         Storage::deleteDirectory($dir);   // clean the temp chunk folder
         $transfer->update(['total_bytes' => $total]);
+        if (! $user) GuestPass::burn($request->ip());   // spend the one-time guest pass
         $this->notifyRecipients($transfer, $request->input('password'));
 
         return (new TransferResource($transfer->load('files')))
@@ -184,18 +193,25 @@ class TransferController extends Controller
         return null;
     }
 
+    /** 422 if this guest IP has already spent its one free send, else null. */
+    private function guestPassGuard(Request $request): ?JsonResponse
+    {
+        if (GuestPass::spent($request->ip())) {
+            return response()->json([
+                'message' => 'You’ve already used your one free guest send. Create a free account to keep sending — it’s unlimited.',
+                'code'    => 'guest_used',
+            ], 422);
+        }
+        return null;
+    }
+
     /** Create the Transfer row from request options (shared by store + commit). */
     private function makeTransfer(Request $request, $user, string $titleFallback): Transfer
     {
-        // Expiry — map token to days, clamp to the plan limit; 'forever' only on top tier.
-        $plan    = $user ? ($user->plan ?: 'free') : 'free';
-        $planMax = (int) \App\Support\PlanRepo::get($plan, 'expiry_days', 7);
-        $map     = ['24h' => 1, '1d' => 1, '3d' => 3, '7d' => 7, '30d' => 30, '60d' => 60, '1y' => 365, 'forever' => null];
-        $token   = $request->input('expiry', '7d');
-        $days    = array_key_exists($token, $map) ? $map[$token] : 7;
-        $expiresAt = $days === null
-            ? ($planMax >= 3650 ? null : now()->addDays($planMax))
-            : now()->addDays(min($days, $planMax));
+        // Expiry — resolve the token to a timestamp, clamped to the plan's max
+        // (now stored in minutes; 'forever' only if the plan allows unlimited).
+        $plan      = $user ? ($user->plan ?: 'free') : 'free';
+        $expiresAt = Transfer::resolveExpiry($plan, $request->input('expiry', '7d'));
 
         return Transfer::create([
             'user_id'             => $user?->id,
@@ -209,6 +225,7 @@ class TransferController extends Controller
             'burn_after_download' => $request->boolean('burn'),
             'notify_on_download'  => $request->boolean('notify', true),
             'expires_at'          => $expiresAt,
+            'download_limit'      => \App\Support\PlanRepo::get($plan, 'download_limit'),   // null = unlimited
             'brand'               => ($request->boolean('branded') && $user?->brand_enabled)
                 ? ['name' => $user->brand_name, 'accent' => $user->brand_accent,
                    'logo' => $user->brand_logo_path ? asset('storage/' . $user->brand_logo_path) : null]
@@ -287,6 +304,7 @@ class TransferController extends Controller
     {
         $transfer = Transfer::where('slug', $slug)->with('files')->firstOrFail();
         abort_if($transfer->isExpired() || $transfer->isBurned(), 410);
+        abort_if($transfer->download_limit !== null && $transfer->download_count >= $transfer->download_limit, 410, 'This transfer has reached its download limit.');
         abort_if($transfer->files->isEmpty(), 404);
 
         $tmp = tempnam(sys_get_temp_dir(), 'beamzip');
@@ -315,6 +333,7 @@ class TransferController extends Controller
     {
         $transfer = Transfer::where('slug', $slug)->firstOrFail();
         abort_if($transfer->isExpired() || $transfer->isBurned(), 410);
+        abort_if($transfer->download_limit !== null && $transfer->download_count >= $transfer->download_limit, 410, 'This transfer has reached its download limit.');
 
         $file = $transfer->files()->findOrFail($fileId);
 

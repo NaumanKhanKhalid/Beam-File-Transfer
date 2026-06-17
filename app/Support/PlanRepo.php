@@ -22,12 +22,16 @@ class PlanRepo
         $out = [];
         foreach (Plan::orderBy('sort')->orderBy('id')->get() as $p) {
             $out[$p->key] = [
-                'name'        => $p->name,
-                'monthly'     => $p->monthly,
-                'yearly'      => $p->yearly,
-                'max_bytes'   => $p->max_bytes,
-                'expiry_days' => $p->expiry_days,
-                'branding'    => $p->branding,
+                'name'           => $p->name,
+                'tagline'        => $p->tagline,
+                'monthly'        => $p->monthly,
+                'yearly'         => $p->yearly,
+                'max_bytes'      => $p->max_bytes,
+                'expiry_minutes' => $p->expiry_minutes,
+                'download_limit' => $p->download_limit,
+                'branding'       => $p->branding,
+                'popular'        => $p->popular,
+                'features'       => $p->features ?? [],
             ];
         }
         return $out;
@@ -71,7 +75,7 @@ class PlanRepo
     private static function clean(array $data): array
     {
         $out = [];
-        foreach (['name', 'monthly', 'yearly', 'max_bytes', 'expiry_days', 'branding'] as $f) {
+        foreach (['name', 'tagline', 'monthly', 'yearly', 'max_bytes', 'expiry_minutes', 'download_limit', 'branding', 'popular', 'features'] as $f) {
             if (array_key_exists($f, $data)) $out[$f] = $data[$f];
         }
         return $out;
@@ -84,14 +88,18 @@ class PlanRepo
         $i = 0;
         foreach (config('plans', []) as $key => $vals) {
             Plan::create([
-                'key'         => $key,
-                'name'        => $vals['name'] ?? ucfirst($key),
-                'monthly'     => $vals['monthly'] ?? 0,
-                'yearly'      => $vals['yearly'] ?? 0,
-                'max_bytes'   => $vals['max_bytes'] ?? 0,
-                'expiry_days' => $vals['expiry_days'] ?? 7,
-                'branding'    => $vals['branding'] ?? false,
-                'sort'        => $i++,
+                'key'            => $key,
+                'name'           => $vals['name'] ?? ucfirst($key),
+                'tagline'        => $vals['tagline'] ?? null,
+                'monthly'        => $vals['monthly'] ?? 0,
+                'yearly'         => $vals['yearly'] ?? 0,
+                'max_bytes'      => $vals['max_bytes'] ?? 0,
+                'expiry_minutes' => $vals['expiry_minutes'] ?? (($vals['expiry_days'] ?? 7) * 1440),
+                'download_limit' => $vals['download_limit'] ?? null,
+                'branding'       => $vals['branding'] ?? false,
+                'popular'        => $vals['popular'] ?? false,
+                'features'       => $vals['features'] ?? [],
+                'sort'           => $i++,
             ]);
         }
     }

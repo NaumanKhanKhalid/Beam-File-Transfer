@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\GoogleAuthController;
 
 /*
 |--------------------------------------------------------------------------
@@ -30,12 +31,16 @@ Route::view('/upgrade', 'pages.upgrade', [
 ])->name('upgrade');
 
 // ---- Admin ----------------------------------------------------------------
-Route::view('/admin', 'pages.admin')->name('admin');
-Route::view('/admin/plans', 'pages.admin-plans')->name('admin.plans');
+Route::view('/admin', 'pages.admin')->name('admin')->middleware(['auth', 'admin']);
+Route::view('/admin/plans', 'pages.admin-plans')->name('admin.plans')->middleware(['auth', 'admin']);
 
 // ---- Auth (guest layout) --------------------------------------------------
 Route::view('/login', 'pages.auth')->name('login');
 Route::view('/reset-password', 'pages.reset-password')->name('password.reset');
+
+// ---- Google OAuth ("Continue with Google") --------------------------------
+Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 
 // ---- Recipient (public, guest layout) -------------------------------------
 Route::view('/recipient', 'pages.recipient')->name('recipient.demo');

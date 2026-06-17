@@ -10,7 +10,14 @@ class EnsureUserIsAdmin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        abort_unless($request->user() && $request->user()->is_admin, 403, 'Admins only.');
+        $user = $request->user();
+        if (! $user || ! $user->is_admin) {
+            // API clients get a 403; browsers are bounced to the app home.
+            if ($request->expectsJson()) {
+                abort(403, 'Admins only.');
+            }
+            return redirect('/');
+        }
 
         return $next($request);
     }
