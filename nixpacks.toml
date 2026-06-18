@@ -1,5 +1,0 @@
-[phases.setup]
-nixPkgs = ["php82", "php82Extensions.pcntl", "php82Extensions.posix", "php82Extensions.mbstring", "php82Extensions.pdo", "php82Extensions.pdo_mysql", "composer"]
-
-[start]
-cmd = "php artisan reverb:start --host=0.0.0.0 --port=8080"
