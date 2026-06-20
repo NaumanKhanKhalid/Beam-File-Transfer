@@ -78,16 +78,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll('[data-auth-tab]').forEach((b) =>
     b.addEventListener('click', () => setMode(b.dataset.authTab)));
-  $('[data-forgot-btn]').addEventListener('click', async (e) => {
+  $('[data-forgot-btn]').addEventListener('click', () => {
+    // Carry whatever they've typed in the email field over to the dedicated page.
     const email = $('#auEmail').value.trim();
-    if (!email || !email.includes('@')) { toast('Type your email above first, then tap Forgot password.', 'danger'); return; }
-    const btn = e.currentTarget; btn.disabled = true;
-    try {
-      await api.auth.forgotPassword(email);
-      toast('If that email is registered, a reset link is on its way.', 'success');
-    } catch (err) {
-      toast(err instanceof ApiError ? err.first : 'Could not send the reset email.', 'danger');
-    } finally { btn.disabled = false; }
+    location.assign('/forgot-password' + (email ? ('?email=' + encodeURIComponent(email)) : ''));
   });
   $('[data-google]').addEventListener('click', () => { location.assign('/auth/google/redirect'); });
   $('#authForm').addEventListener('submit', submit);

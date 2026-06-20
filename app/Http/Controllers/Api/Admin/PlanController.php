@@ -22,6 +22,7 @@ class PlanController extends Controller
         'max_bytes'      => ['required', 'numeric', 'min:0'],
         'expiry_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:52560000'], // up to 100 years
         'download_limit' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:1000000'],
+        'file_limit'     => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
         'branding'       => ['sometimes', 'boolean'],
         'popular'        => ['sometimes', 'boolean'],
         'features'       => ['sometimes', 'array', 'max:20'],

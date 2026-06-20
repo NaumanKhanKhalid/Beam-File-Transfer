@@ -25,6 +25,10 @@ class TransferResource extends JsonResource
             'expires_at'     => optional($this->expires_at)->toIso8601String(),
             'expired'        => $this->isExpired(),
             'burned'         => $this->isBurned(),
+            // Whether this server can build a single .zip (needs ext-zip or the
+            // ZipStream library). Lets the recipient page decide upfront between a
+            // one-click ZIP and downloading files individually.
+            'zip_available'  => class_exists(\ZipStream\ZipStream::class) || class_exists(\ZipArchive::class),
             'brand'          => $this->brand,
             'link'           => url("/r/{$this->slug}"),
             'files'          => TransferFileResource::collection($this->whenLoaded('files')),

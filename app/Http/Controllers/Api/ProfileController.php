@@ -56,6 +56,35 @@ class ProfileController extends Controller
         return new UserResource($user->fresh());
     }
 
+    /** POST /api/profile/avatar — upload (or remove) the profile photo. Any
+     *  signed-in account can set one; guests have no account, so they can't. */
+    public function avatar(Request $request): UserResource
+    {
+        $user = $request->user();
+
+        // remove=1 clears the photo (falls back to initials).
+        if ($request->boolean('remove')) {
+            if ($user->avatar_url && ! str_starts_with($user->avatar_url, 'http')) {
+                Storage::disk('public')->delete($user->avatar_url);
+            }
+            $user->update(['avatar_url' => null]);
+            return new UserResource($user->fresh());
+        }
+
+        $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+        ]);
+
+        // Drop a previous local upload (don't try to delete a Google URL).
+        if ($user->avatar_url && ! str_starts_with($user->avatar_url, 'http')) {
+            Storage::disk('public')->delete($user->avatar_url);
+        }
+        $path = $request->file('avatar')->store('avatars', 'public');
+        $user->update(['avatar_url' => $path]);
+
+        return new UserResource($user->fresh());
+    }
+
     /** PUT /api/profile/password — change password after confirming the current one. */
     public function password(Request $request): JsonResponse
     {

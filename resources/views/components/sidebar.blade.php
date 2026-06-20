@@ -20,7 +20,7 @@
                 <x-icon :name="$i['icon']" class="w-[18px] h-[18px]" />
                 <span>{{ $i['label'] }}</span>
                 {{-- Live transfer count, filled by beam.js from /api/transfers/stats. Hidden until > 0. --}}
-                <span data-nav-count="{{ $i['key'] }}" class="ml-auto font-mono text-[11px] hidden {{ $on ? 'text-brand-100' : 'text-ink-400' }}"></span>
+                <span data-nav-count="{{ $i['key'] }}" class="ml-auto min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full font-mono text-[11px] font-semibold hidden {{ $on ? 'bg-white/20 text-white' : 'bg-white/10 text-ink-200' }}"></span>
             </a>
         @endforeach
     </nav>

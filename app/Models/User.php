@@ -43,4 +43,13 @@ class User extends Authenticatable
     {
         return in_array($this->plan, ['pro', 'business'], true);
     }
+
+    /** Public URL for the profile photo: absolute (Google) or a stored upload. */
+    public function avatarUrl(): ?string
+    {
+        if (! $this->avatar_url) return null;
+        return str_starts_with($this->avatar_url, 'http')
+            ? $this->avatar_url
+            : asset('storage/' . $this->avatar_url);
+    }
 }

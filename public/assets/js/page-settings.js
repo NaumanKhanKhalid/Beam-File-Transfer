@@ -23,6 +23,74 @@ const isProPlan = (p) => ['pro', 'business'].includes(String(p || '').toLowerCas
 let lockedPlanHtml = '';
 let lockedBrandHtml = '';
 
+// Plan catalogue (DB-backed, admin-editable) — fetched once so the plan card
+// shows the user's REAL limits instead of hard-coded copy.
+const GB_ = 1024 * 1024 * 1024;
+let plansCache = null;
+async function ensurePlans() {
+  if (plansCache) return plansCache;
+  try { const r = await api.plans(); plansCache = r.plans || r || {}; }
+  catch (e) { plansCache = {}; }
+  return plansCache;
+}
+function fmtStorage(b) {
+  if (b == null) return '';
+  if (b >= GB_ * 1024) { const v = b / (GB_ * 1024); return (Math.round(v * 10) / 10).toString().replace(/\.0$/, '') + ' TB'; }
+  if (b >= GB_) return Math.round(b / GB_) + ' GB';
+  return Math.round(b / (1024 * 1024)) + ' MB';
+}
+function fmtExpiry(min) {
+  if (min == null) return 'Unlimited expiry';
+  if (min % 1440 === 0) { const d = min / 1440; if (d % 365 === 0) { const y = d / 365; return y + (y > 1 ? ' years' : ' year') + ' expiry'; } return d + (d > 1 ? ' days' : ' day') + ' expiry'; }
+  if (min % 60 === 0) { const h = min / 60; return h + (h > 1 ? ' hours' : ' hour') + ' expiry'; }
+  return min + '-minute expiry';
+}
+function fmtDownloads(n) { return n == null ? 'Unlimited downloads' : `Up to ${n} downloads / transfer`; }
+const money_ = (n) => n > 0 ? '₹' + Number(n).toLocaleString('en-IN') : 'Free';
+
+// Paint the Plan card from real plan data: current plan + limits, plus an upgrade
+// box (for free users) or a "Switch to Free" control (for paid users).
+function paintPlanCard(plans) {
+  const card = $('#planCard');
+  if (!card || !plans) return;
+  const key = String(user?.plan || 'free').toLowerCase();
+  const p = plans[key] || plans.free || {};
+  const paid = isProPlan(key);
+  const limits = [
+    [`${fmtStorage(p.max_bytes)} per transfer`, 'inbox'],
+    [fmtExpiry(p.expiry_minutes), 'clock'],
+    [fmtDownloads(p.download_limit), 'download'],
+  ];
+  if (p.branding) limits.push(['Branded transfer pages', 'palette']);
+  const chips = limits.map(([f, icn]) => `<span class="inline-flex items-center gap-1.5 text-[12px] text-ink-700 bg-ink-50 border border-ink-100 rounded-full px-3 py-1.5">${ic(icn, 'w-3.5 h-3.5 text-success-500')}${f}</span>`).join('');
+  const badgeTone = paid ? 'bg-brand-50 text-brand-700' : 'bg-ink-100 text-ink-500';
+
+  // Upgrade target for free users = the "popular" paid plan, else the first paid one.
+  const paidKeys = Object.keys(plans).filter((k) => isProPlan(k));
+  const upKey = paidKeys.find((k) => plans[k].popular) || paidKeys[0];
+  const up = upKey ? plans[upKey] : null;
+  const upPrice = up ? (up.yearly || up.monthly) : 0;
+
+  card.innerHTML = `
+    <div class="flex items-start justify-between gap-3 mb-4">
+      <div><div class="flex items-center gap-2"><h3 class="font-display font-bold text-lg text-ink-900 tracking-tight">Plan</h3><span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${badgeTone}">${p.name || 'Free'}</span></div>
+      <p class="text-[13px] text-ink-400 mt-0.5">${p.tagline ? p.tagline + ' · ' : ''}You're on the ${p.name || 'Free'} plan.</p></div>
+      ${ic('crown', `w-7 h-7 ${paid ? 'text-spark-600' : 'text-ink-300'}`)}
+    </div>
+    <div class="flex flex-wrap gap-2">${chips}</div>
+    ${paid
+      ? `<div class="mt-5"><button type="button" data-downgrade class="h-[42px] px-5 rounded-full bg-white border border-ink-200 hover:bg-ink-50 text-ink-700 text-sm font-semibold transition-colors">Switch to Free</button></div>`
+      : (up ? `<div class="rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 p-5 text-white relative overflow-hidden mt-5">
+          <div class="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-spark-500 opacity-20 blur-lg"></div>
+          <div class="relative">
+            <div class="font-display font-bold text-xl">Beam ${up.name} — ${money_(upPrice)}/mo</div>
+            <p class="text-brand-100 text-sm mt-1">${fmtStorage(up.max_bytes)} sends, ${fmtExpiry(up.expiry_minutes).replace(' expiry', '')} expiry${up.branding ? ', branded pages' : ''}.</p>
+            <a href="/upgrade" class="inline-flex items-center mt-4 h-[42px] px-5 rounded-full bg-spark-500 hover:bg-spark-600 text-ink-900 text-sm font-bold transition-colors">Upgrade to ${up.name}</a>
+          </div>
+        </div>` : '')}`;
+  card.querySelector('[data-downgrade]')?.addEventListener('click', downgrade);
+}
+
 function readProfileCache() {
   try { return JSON.parse(localStorage.getItem(PROFILE_CACHE) || 'null'); } catch (e) { return null; }
 }
@@ -33,11 +101,11 @@ function writeProfileCache() {
 // Swap the Plan + Branding cards between the unlocked Pro editor and the locked
 // free state (the original Blade markup).
 function applyProState(isPro) {
-  if (isPro) { paintProPlan(); mountBranding(); }
-  else {
-    if (lockedPlanHtml) $('#planCard').innerHTML = lockedPlanHtml;
-    if (lockedBrandHtml) $('#brandingCard').innerHTML = lockedBrandHtml;
-  }
+  // Branding card: unlocked editor for paid plans, locked CTA otherwise.
+  if (isPro) mountBranding();
+  else if (lockedBrandHtml) $('#brandingCard').innerHTML = lockedBrandHtml;
+  // Plan card is painted from real (admin-editable) plan data when available.
+  if (plansCache) paintPlanCard(plansCache);
 }
 
 /* ---- Profile ------------------------------------------------------------- */
@@ -47,8 +115,12 @@ function paintProfile() {
   const email = user ? user.email : (gname ? 'Guest · no account' : '—');
   $('[data-name-display]').textContent = name;
   $('[data-email-display]').textContent = email;
-  $('[data-avatar-initials]').textContent = (user || gname) ? (user?.initials || initialsOf(name)) : 'G';
-  $('[data-avatar]').style.background = brand.on ? brand.accent : '#4B3AFF';
+  paintAvatar();
+  // Photo upload is for signed-in accounts only (guests have no account).
+  const actions = $('[data-avatar-actions]');
+  if (actions) { actions.classList.toggle('hidden', !user); actions.classList.toggle('flex', !!user); }
+  const removeBtn = $('[data-avatar-remove]');
+  if (removeBtn) removeBtn.classList.toggle('hidden', !(user && user.avatar));
   $('#setName').value = user ? name : gname;
   $('#setEmail').value = user ? email : '';
   // Guests have no account email; make that clear and steer them to register.
@@ -63,6 +135,24 @@ function paintProfile() {
     emailInp.disabled = false;
     emailInp.classList.remove('opacity-60', 'cursor-not-allowed');
     if (hint) hint.textContent = '';
+  }
+}
+
+/* Paint the profile avatar: photo if set, otherwise coloured initials. */
+function paintAvatar() {
+  const el = $('[data-avatar]');
+  if (!el) return;
+  const gname = guestName();
+  const name = user ? user.name : (gname || 'Guest');
+  const initials = (user || gname) ? (user?.initials || initialsOf(name)) : 'G';
+  if (user && user.avatar) {
+    el.style.backgroundImage = `url('${user.avatar}')`;
+    el.style.background = `center/cover no-repeat url('${user.avatar}')`;
+    const ini = el.querySelector('[data-avatar-initials]'); if (ini) ini.textContent = '';
+  } else {
+    el.style.backgroundImage = '';
+    el.style.background = brand.on ? brand.accent : '#4B3AFF';
+    const ini = el.querySelector('[data-avatar-initials]'); if (ini) ini.textContent = initials;
   }
 }
 
@@ -81,7 +171,7 @@ async function saveProfile() {
   try {
     const u = await api.profile.update({ name, email });
     const nu = u.data || u;
-    user = { name: nu.name, email: nu.email, plan: nu.plan, initials: nu.initials || initialsOf(nu.name) };
+    user = { name: nu.name, email: nu.email, plan: nu.plan, avatar: nu.avatar ?? user?.avatar ?? null, initials: nu.initials || initialsOf(nu.name) };
     paintProfile();
     writeProfileCache();
     toast('Profile saved', 'success');
@@ -249,6 +339,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Remember the locked free-state markup before any swap, so we can revert.
   lockedPlanHtml = $('#planCard')?.innerHTML || '';
   lockedBrandHtml = $('#brandingCard')?.innerHTML || '';
+  // Fetch the real plan catalogue and paint the plan card from it (works for
+  // guests → Free, and repaints once the signed-in user/plan is known).
+  ensurePlans().then((pl) => paintPlanCard(pl));
 
   // Logo upload (input lives in the app layout)
   $('#brandLogoPick')?.addEventListener('change', async (e) => {
@@ -257,6 +350,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     mountBranding();
     try { const u = await api.profile.branding({ enabled: 1, name: brand.name, accent: brand.accent, logo: f }); const nu = u.data || u; if (nu.brand?.logo) brand.logo = nu.brand.logo; mountBranding(); writeProfileCache(); toast('Logo updated', 'success'); } catch (err) { /* keep local preview */ }
     e.target.value = '';
+  });
+
+  // Profile photo upload (signed-in accounts only; buttons stay hidden for guests).
+  $('[data-avatar-pick]')?.addEventListener('click', () => $('#avatarPick')?.click());
+  $('#avatarPick')?.addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    if (f.size > 4 * 1024 * 1024) { toast('Image must be under 4 MB.', 'danger'); e.target.value = ''; return; }
+    if (user) { user.avatar = URL.createObjectURL(f); paintProfile(); }   // instant local preview
+    try {
+      const u = await api.profile.avatar(f); const nu = u.data || u;
+      if (user) user.avatar = nu.avatar || user.avatar;
+      paintProfile(); writeProfileCache(); toast('Photo updated', 'success');
+    } catch (err) { toast(err instanceof ApiError ? err.first : 'Could not upload photo.', 'danger'); }
+    e.target.value = '';
+  });
+  $('[data-avatar-remove]')?.addEventListener('click', async () => {
+    try {
+      const u = await api.profile.avatar(null); const nu = u.data || u;
+      if (user) user.avatar = nu.avatar || null;
+      paintProfile(); writeProfileCache(); toast('Photo removed', 'brand');
+    } catch (err) { toast('Could not remove photo.', 'danger'); }
   });
 
   if (!api.authenticated) { paintProfile(); loadStorage(); return; }
@@ -276,7 +390,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 2) Refresh from the server, then reconcile (covers upgrades/downgrades).
   try {
     const u = await api.auth.me();
-    user = { name: u.name, email: u.email, plan: u.plan, initials: u.initials || initialsOf(u.name) };
+    user = { name: u.name, email: u.email, plan: u.plan, avatar: u.avatar || null, initials: u.initials || initialsOf(u.name) };
     if (u.brand) Object.assign(brand, { on: !!u.brand.enabled, name: u.brand.name || '', accent: u.brand.accent || '#4B3AFF', logo: u.brand.logo || null });
     paintProfile();
     loadStorage();

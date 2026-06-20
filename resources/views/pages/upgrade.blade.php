@@ -39,7 +39,11 @@
                 </button>
                 <div class="flex flex-col gap-2.5">
                     @foreach ($p['features'] as $f)
-                        <div class="flex items-start gap-2.5 text-[13px] text-ink-700"><span class="text-success-500 mt-0.5 flex-none"><x-icon name="check" class="w-4 h-4" /></span>{{ $f }}</div>
+                        @if (\Illuminate\Support\Str::endsWith($f, 'plus:'))
+                            <div class="text-[12px] font-bold uppercase tracking-[.05em] text-ink-400 {{ $loop->first ? '' : 'mt-2' }}">{{ $f }}</div>
+                        @else
+                            <div class="flex items-start gap-2.5 text-[13px] text-ink-700"><span class="text-success-500 mt-0.5 flex-none"><x-icon name="check" class="w-4 h-4" /></span>{{ $f }}</div>
+                        @endif
                     @endforeach
                 </div>
             </div>

@@ -41,6 +41,17 @@ Route::post('/transfers',          [TransferController::class, 'store']);
 Route::get('/t/{slug}',            [TransferController::class, 'show']);
 Route::post('/t/{slug}/unlock',    [TransferController::class, 'unlock']);
 Route::get('/t/{slug}/zip',        [TransferController::class, 'zip']);
+// Quick health check — visit /api/_diag/zip in the SAME browser/server to see
+// whether ext-zip is actually loaded by the running PHP process + which php.ini.
+Route::get('/_diag/zip', function () {
+    return response()->json([
+        'zip_loaded'  => class_exists(\ZipArchive::class),
+        'php_version' => PHP_VERSION,
+        'php_binary'  => PHP_BINARY,
+        'loaded_ini'  => php_ini_loaded_file() ?: '(none)',
+        'extra_ini'   => php_ini_scanned_files() ?: '(none)',
+    ]);
+});
 Route::get('/t/{slug}/files/{file}', [TransferController::class, 'download']);
 
 // Sender's own transfers + dashboard stats (signed-in by account, guest by IP).
@@ -60,6 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/email/resend', [EmailVerificationController::class, 'resend']);
 
     Route::patch('/profile',          [ProfileController::class, 'update']);
+    Route::post('/profile/avatar',    [ProfileController::class, 'avatar']);
     Route::put('/profile/password',   [ProfileController::class, 'password']);
     Route::put('/profile/branding',   [ProfileController::class, 'branding']);
     Route::delete('/account',         [ProfileController::class, 'destroy']);

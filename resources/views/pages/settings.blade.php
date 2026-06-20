@@ -9,8 +9,16 @@
     <div data-reveal class="bg-white border border-ink-100 rounded-2xl p-6 shadow-sm">
         <div class="mb-4"><h3 class="font-display font-bold text-lg text-ink-900 tracking-tight">Profile</h3><p class="text-[13px] text-ink-400 mt-0.5">Your name and email on every transfer you send.</p></div>
         <div class="flex items-center gap-4 mb-5">
-            <span data-avatar class="w-16 h-16 rounded-full text-white font-display font-bold text-2xl flex items-center justify-center flex-none" style="background:#4B3AFF"><span data-avatar-initials>G</span></span>
-            <div><div data-name-display class="font-display font-bold text-lg text-ink-900">Guest</div><div data-email-display class="text-[13px] text-ink-400">—</div></div>
+            <span data-avatar class="w-16 h-16 rounded-full text-white font-display font-bold text-2xl flex items-center justify-center flex-none overflow-hidden bg-cover bg-center" style="background:#4B3AFF"><span data-avatar-initials>G</span></span>
+            <div class="flex-1 min-w-0">
+                <div data-name-display class="font-display font-bold text-lg text-ink-900">Guest</div>
+                <div data-email-display class="text-[13px] text-ink-400">—</div>
+                <div data-avatar-actions class="hidden items-center gap-2 mt-2">
+                    <button type="button" data-avatar-pick class="h-8 px-3 rounded-full bg-white border border-ink-200 hover:bg-ink-50 text-ink-700 text-[12.5px] font-semibold transition-colors">Upload photo</button>
+                    <button type="button" data-avatar-remove class="hidden h-8 px-3 rounded-full text-ink-400 hover:text-danger-500 text-[12.5px] font-semibold transition-colors">Remove</button>
+                </div>
+            </div>
+            <input type="file" id="avatarPick" accept="image/png,image/jpeg,image/webp" class="hidden">
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label class="flex flex-col gap-1.5"><span class="text-[13px] font-semibold text-ink-900">Full name</span><input id="setName" type="text" value="" placeholder="Your name" class="w-full h-11 px-3.5 rounded-xl border border-ink-200 text-[15px] text-ink-900 bg-white outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/30 transition placeholder:text-ink-300"></label>

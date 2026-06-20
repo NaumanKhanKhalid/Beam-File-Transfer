@@ -36,6 +36,7 @@ Route::view('/admin/plans', 'pages.admin-plans')->name('admin.plans')->middlewar
 
 // ---- Auth (guest layout) --------------------------------------------------
 Route::view('/login', 'pages.auth')->name('login');
+Route::view('/forgot-password', 'pages.forgot-password')->name('password.forgot');
 Route::view('/reset-password', 'pages.reset-password')->name('password.reset');
 
 // ---- Google OAuth ("Continue with Google") --------------------------------

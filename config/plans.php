@@ -16,14 +16,16 @@ return [
         'max_bytes'      => 2 * 1024 * 1024 * 1024,         // 2 GB per transfer
         'expiry_minutes' => 7 * 1440,                        // 7 days
         'download_limit' => 20,                              // 20 downloads per transfer
+        'file_limit'     => 20,                              // up to 20 files per transfer
         'branding'       => false,
         'popular'        => false,
         'features'       => [
             '2 GB per transfer',
-            '7-day expiry',
-            'Email or link sharing',
-            'Up to 3 transfers at once',
+            '7-day link expiry',
+            'Up to 20 files per transfer',
+            'Email, link & QR sharing',
             'Up to 20 downloads per transfer',
+            'Encrypted transfers',
         ],
     ],
     'pro' => [
@@ -34,16 +36,19 @@ return [
         'max_bytes'      => 200 * 1024 * 1024 * 1024,        // 200 GB
         'expiry_minutes' => 365 * 1440,                      // 1 year
         'download_limit' => null,                            // unlimited
+        'file_limit'     => null,                             // unlimited
         'branding'       => true,
         'popular'        => true,
         'features'       => [
+            'Everything in Free, plus:',
             '200 GB per transfer',
-            '1-year expiry',
-            'Branded transfer pages',
-            'Password + delete-after-download',
+            '1-year link expiry',
+            'Unlimited files & downloads',
+            'Custom branding & logo',
+            'Password protection',
+            'Delete-after-download',
             'Live download tracking',
-            'Unlimited downloads',
-            'Priority support',
+            'Priority email support',
         ],
     ],
     'business' => [
@@ -54,15 +59,17 @@ return [
         'max_bytes'      => 1024 * 1024 * 1024 * 1024,       // 1 TB
         'expiry_minutes' => null,                            // unlimited
         'download_limit' => null,                            // unlimited
+        'file_limit'     => null,                             // unlimited
         'branding'       => true,
         'popular'        => false,
         'features'       => [
+            'Everything in Pro, plus:',
             '1 TB per transfer',
-            'Unlimited expiry',
+            'Unlimited link expiry',
             'Admin & member roles',
             'Custom domain (files.you.com)',
-            'Unlimited downloads',
             'SSO + audit log',
+            'Dedicated support',
         ],
     ],
 ];

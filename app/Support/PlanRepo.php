@@ -29,6 +29,7 @@ class PlanRepo
                 'max_bytes'      => $p->max_bytes,
                 'expiry_minutes' => $p->expiry_minutes,
                 'download_limit' => $p->download_limit,
+                'file_limit'     => $p->file_limit,
                 'branding'       => $p->branding,
                 'popular'        => $p->popular,
                 'features'       => $p->features ?? [],
@@ -75,7 +76,7 @@ class PlanRepo
     private static function clean(array $data): array
     {
         $out = [];
-        foreach (['name', 'tagline', 'monthly', 'yearly', 'max_bytes', 'expiry_minutes', 'download_limit', 'branding', 'popular', 'features'] as $f) {
+        foreach (['name', 'tagline', 'monthly', 'yearly', 'max_bytes', 'expiry_minutes', 'download_limit', 'file_limit', 'branding', 'popular', 'features'] as $f) {
             if (array_key_exists($f, $data)) $out[$f] = $data[$f];
         }
         return $out;
@@ -96,6 +97,7 @@ class PlanRepo
                 'max_bytes'      => $vals['max_bytes'] ?? 0,
                 'expiry_minutes' => $vals['expiry_minutes'] ?? (($vals['expiry_days'] ?? 7) * 1440),
                 'download_limit' => $vals['download_limit'] ?? null,
+                'file_limit'     => $vals['file_limit'] ?? null,
                 'branding'       => $vals['branding'] ?? false,
                 'popular'        => $vals['popular'] ?? false,
                 'features'       => $vals['features'] ?? [],

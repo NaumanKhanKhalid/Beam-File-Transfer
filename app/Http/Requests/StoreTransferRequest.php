@@ -23,7 +23,7 @@ class StoreTransferRequest extends FormRequest
             'message'      => ['nullable', 'string', 'max:1000'],
             'recipients'   => ['nullable', 'array'],
             'recipients.*' => ['email'],
-            'expiry'       => ['nullable', 'in:24h,1d,3d,7d,30d,60d,1y,forever'],
+            'expiry'       => ['nullable', 'string', 'max:16', 'regex:/^(m:\d{1,8}|1h|24h|1d|3d|7d|30d|60d|1y|forever)$/'],
             'password'     => ['nullable', 'string', 'min:4', 'max:64'],
             'burn'         => ['boolean'],
             'notify'       => ['boolean'],

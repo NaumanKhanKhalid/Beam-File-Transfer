@@ -34,19 +34,32 @@ function fileRowHtml(f, i) {
 }
 
 function renderFiles() {
-  const has = state.files.length > 0;
   refs.list.innerHTML = state.files.map((f, i) => fileRowHtml(f, i)).join('');
+  syncFilesMeta();
+}
+
+// Update totals / empty-state / meter WITHOUT rebuilding the list (so removing one
+// row doesn't re-run every other row's entrance animation — that was the flicker).
+function syncFilesMeta() {
+  const has = state.files.length > 0;
   refs.empty.classList.toggle('hidden', has);
   refs.list.classList.toggle('hidden', !has);
   refs.total.textContent = `${state.files.length} file${state.files.length === 1 ? '' : 's'} · ${humanSize(state.files.reduce((a, f) => a + f.sizeBytes, 0)) || '0 B'}`;
-  refs.list.querySelectorAll('[data-remove]').forEach((b) =>
-    b.addEventListener('click', () => {
-      const [removed] = state.files.splice(+b.dataset.remove, 1);
-      if (removed && removed.url) URL.revokeObjectURL(removed.url);   // free the image preview
-      renderFiles();
-    }));
   updateStorageMeter();
   updateSend();
+}
+
+// Bound once (in init). Removes just the clicked row's node — no full re-render.
+function onListClick(e) {
+  const btn = e.target.closest('[data-remove]');
+  if (!btn) return;
+  const row = btn.closest('.file-in');
+  const idx = row ? [...refs.list.children].indexOf(row) : -1;
+  if (idx < 0) return;
+  const [removed] = state.files.splice(idx, 1);
+  if (removed && removed.url) URL.revokeObjectURL(removed.url);   // free the image preview
+  row.remove();
+  syncFilesMeta();
 }
 
 // Storage meter reflects REAL server usage (from beam.js / GET /api/usage) plus
@@ -82,6 +95,168 @@ function updateSend() {
 
 const isPro = () => ['pro', 'business'].includes(String(usageState.plan || '').toLowerCase());
 
+// Expiry presets (minutes). Rendered dynamically and filtered to the plan's real
+// max — senders only ever see (and can pick) durations their plan allows, plus a
+// free-form "Custom…" option. A plan with expiry_minutes:null = unlimited.
+const EXPIRY_PRESETS = [
+  { v: '1h',  label: '1 hour',  min: 60 },
+  { v: '1d',  label: '1 day',   min: 1440 },
+  { v: '3d',  label: '3 days',  min: 4320 },
+  { v: '7d',  label: '7 days',  min: 10080 },
+  { v: '30d', label: '30 days', min: 43200 },
+  { v: '1y',  label: '1 year',  min: 525600 },
+];
+let plansCatalog = null;
+let planLimits = { expiryMin: undefined, downloadLimit: undefined, name: '' };
+let customExpiryMin = null;   // remembered custom value (minutes) while "Custom" is active
+
+// Pull the (admin-editable) plan catalogue and read THIS sender's real limits.
+async function loadPlanLimits() {
+  if (!plansCatalog) {
+    try { const r = await api.plans(); plansCatalog = r.plans || r || {}; }
+    catch (e) { plansCatalog = {}; }
+  }
+  const key = String(usageState.plan || 'free').toLowerCase();
+  const p = plansCatalog[key] || plansCatalog.free || {};
+  planLimits = {
+    expiryMin:     ('expiry_minutes' in p) ? p.expiry_minutes : undefined,
+    downloadLimit: ('download_limit' in p) ? p.download_limit : undefined,
+    name: p.name || '',
+  };
+  renderExpiry();
+  paintLimitsInfo();
+}
+
+// Plan expiry cap in minutes: number, or null = unlimited. Until the plan loads
+// (undefined) we default to a safe 7-day cap so we don't briefly over-offer.
+function expiryCap() { const m = planLimits.expiryMin; return m === undefined ? 10080 : m; }
+
+function fmtExpiryMin(min) {
+  if (min == null) return 'never expire';
+  if (min % 1440 === 0) { const d = min / 1440; if (d % 365 === 0) { const y = d / 365; return y + (y > 1 ? ' years' : ' year'); } return d + (d > 1 ? ' days' : ' day'); }
+  if (min % 60 === 0) { const h = min / 60; return h + (h > 1 ? ' hours' : ' hour'); }
+  return min + ' minute' + (min === 1 ? '' : 's');
+}
+
+function chipHtml(v, label, on) {
+  return `<button type="button" data-expiry="${v}" class="expiry-chip inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[13px] font-medium transition-all ${on ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-ink-150 text-ink-700 hover:border-ink-300'}">${label}</button>`;
+}
+
+// Render only the presets the plan allows (+ Forever if unlimited) + a Custom chip.
+function renderExpiry() {
+  const group = refs.expiryGroup; if (!group) return;
+  const cap = expiryCap();
+  const unlimited = cap === null;
+  const presets = EXPIRY_PRESETS.filter((p) => unlimited || p.min <= cap);
+
+  const valid = new Set(presets.map((c) => c.v));
+  if (unlimited) valid.add('forever');
+  const selIsCustom = typeof state.expiry === 'string' && state.expiry.startsWith('m:');
+  if (!selIsCustom && !valid.has(state.expiry)) {
+    state.expiry = valid.has('7d') ? '7d' : (presets.length ? presets[presets.length - 1].v : (unlimited ? 'forever' : '1h'));
+  }
+
+  let html = presets.map((c) => chipHtml(c.v, c.label, state.expiry === c.v)).join('');
+  if (unlimited) html += chipHtml('forever', 'Forever', state.expiry === 'forever');
+  html += chipHtml('__custom', 'Custom…', selIsCustom);
+  group.innerHTML = html;
+  group.querySelectorAll('[data-expiry]').forEach((b) => b.addEventListener('click', () => onExpiryClick(b.dataset.expiry)));
+
+  renderCustomRow(selIsCustom);
+  paintUpsell();
+}
+
+function defaultCustomMin() { const cap = expiryCap(); return cap === null ? 60 : Math.min(60, cap); }
+
+function onExpiryClick(v) {
+  if (v === '__custom') {
+    // Seed the custom value from the currently-selected preset (or remembered
+    // value), clamped to the plan cap — so it never opens above the max.
+    if (!customExpiryMin) {
+      const cur = EXPIRY_PRESETS.find((p) => p.v === state.expiry);
+      customExpiryMin = cur ? cur.min : defaultCustomMin();
+    }
+    const cap = expiryCap();
+    if (cap !== null && customExpiryMin > cap) customExpiryMin = cap;
+    state.expiry = 'm:' + customExpiryMin;
+  } else {
+    state.expiry = v;
+  }
+  renderExpiry();
+}
+
+// Inline number + unit for a free-form expiry, clamped to the plan cap.
+function renderCustomRow(show) {
+  const row = $('#expiryCustomRow'); if (!row) return;
+  if (!show) { row.classList.add('hidden'); row.classList.remove('flex'); row.innerHTML = ''; return; }
+  const cap = expiryCap();
+  const cur = customExpiryMin || defaultCustomMin();
+  let unit = 'minutes', val = cur;
+  if (cur % 1440 === 0) { unit = 'days'; val = cur / 1440; }
+  else if (cur % 60 === 0) { unit = 'hours'; val = cur / 60; }
+  const units = [['minutes', 'min'], ['hours', 'hrs'], ['days', 'days']];
+  // Don't offer a unit bigger than the plan cap (avoids "1 days · max 3 hours").
+  const unitOk = (u) => cap === null || (u === 'minutes') || (u === 'hours' && cap >= 60) || (u === 'days' && cap >= 1440);
+  row.innerHTML = `
+    <div class="flex items-center gap-2.5 flex-wrap bg-ink-50 border border-ink-150 rounded-xl px-3 py-2.5 w-full">
+      <span class="text-[12px] font-medium text-ink-600">Expire after</span>
+      <span class="inline-flex items-center rounded-lg border border-ink-200 bg-white overflow-hidden focus-within:border-brand-500 focus-within:ring-[3px] focus-within:ring-brand-500/20 transition">
+        <input id="customExpiryVal" type="number" min="1" value="${val}" class="w-14 h-9 px-2.5 text-right text-[13px] font-mono font-semibold text-ink-900 bg-transparent border-0 outline-none">
+        <select id="customExpiryUnit" class="h-9 pl-2 pr-1.5 text-[12px] font-semibold text-ink-600 bg-ink-50 border-0 border-l border-ink-200 outline-none cursor-pointer">
+          ${units.filter((u) => unitOk(u[0])).map((u) => `<option value="${u[0]}" ${u[0] === unit ? 'selected' : ''}>${u[1]}</option>`).join('')}
+        </select>
+      </span>
+      ${cap !== null ? `<span class="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-ink-400 whitespace-nowrap">${ic('clock', 'w-3 h-3')}Max ${fmtExpiryMin(cap)}</span>` : ''}
+    </div>`;
+  row.classList.remove('hidden'); row.classList.add('flex', 'flex-wrap');
+
+  const valEl = $('#customExpiryVal');
+  const unitEl = $('#customExpiryUnit');
+  const recompute = (notify) => {
+    const per = unitEl.value === 'days' ? 1440 : unitEl.value === 'hours' ? 60 : 1;
+    let n = Math.max(1, parseInt(valEl.value, 10) || 1);
+    let mins = n * per;
+    if (cap !== null && mins > cap) {
+      n = Math.max(1, Math.floor(cap / per));   // largest value that fits the cap in this unit
+      mins = n * per;
+      valEl.value = n;                          // write the clamped value back — UI can't show over-max
+      if (notify) toast(`Your plan allows up to ${fmtExpiryMin(cap)}.`, 'brand');
+    }
+    customExpiryMin = mins;
+    state.expiry = 'm:' + mins;
+  };
+  valEl.addEventListener('input', () => recompute(false));
+  valEl.addEventListener('blur', () => recompute(true));
+  unitEl.addEventListener('change', () => recompute(true));
+  customExpiryMin = cur; state.expiry = 'm:' + cur;   // sync state to what's shown
+}
+
+// Small line under the chips: the plan's real expiry cap + download limit,
+// shown as tidy pills (not a run-on sentence).
+function limitPill(icon, txt) {
+  return `<span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-600 bg-ink-50 border border-ink-150 rounded-full px-2.5 py-1">${ic(icon, 'w-3.5 h-3.5 text-ink-400')}${txt}</span>`;
+}
+function paintLimitsInfo() {
+  const el = $('[data-plan-limits]'); if (!el) return;
+  const pills = [];
+  if (planLimits.expiryMin !== undefined) pills.push(limitPill('clock', planLimits.expiryMin == null ? 'Never expires' : 'Up to ' + fmtExpiryMin(planLimits.expiryMin)));
+  if (state.switches && state.switches.burn) pills.push(limitPill('zap', 'Single-use'));
+  else if (planLimits.downloadLimit !== undefined) pills.push(limitPill('download', planLimits.downloadLimit == null ? 'Unlimited downloads' : `${planLimits.downloadLimit} downloads`));
+  if (!pills.length) { el.classList.add('hidden'); el.classList.remove('flex'); return; }
+  el.innerHTML = pills.join('');
+  el.classList.remove('hidden'); el.classList.add('flex');
+}
+
+// "Need longer? Upgrade" hint when the plan can't reach the longer presets.
+function paintUpsell() {
+  const el = $('[data-expiry-upsell]'); if (!el) return;
+  const cap = expiryCap();
+  const hasLonger = cap !== null && EXPIRY_PRESETS.some((p) => p.min > cap);
+  if (cap === null || !hasLonger) { el.classList.add('hidden'); return; }
+  el.innerHTML = `Need longer than ${fmtExpiryMin(cap)}? <a href="/upgrade" class="font-semibold hover:underline">Upgrade →</a>`;
+  el.classList.remove('hidden');
+}
+
 // Mode toggle: "Send email" (notify recipients) vs "Create link" (just a link).
 // In link mode the email field is hidden and recipients are skipped.
 function applyMode() {
@@ -102,16 +277,8 @@ function bindMode() {
   applyMode();
 }
 
-// Mark Pro-only expiry chips with a PRO tag when the sender isn't on a paid plan.
-function gateProExpiry() {
-  if (!refs.expiryGroup) return;
-  const pro = isPro();
-  refs.expiryGroup.querySelectorAll('[data-expiry][data-tier="pro"]').forEach((b) => {
-    const tag = b.querySelector('[data-pro-tag]');
-    if (tag) tag.classList.toggle('hidden', pro);
-    b.classList.toggle('opacity-60', !pro);
-  });
-}
+// Expiry chips are rendered dynamically (renderExpiry) and filtered to the plan.
+function gateProExpiry() { renderExpiry(); }
 
 // Recursively read dropped directory entries (webkitGetAsEntry) into a flat File[],
 // tagging each with .relPath so the folder structure is preserved like the picker.
@@ -160,6 +327,7 @@ function bindToggles() {
       state.switches[id] = !state.switches[id];
       btn.setAttribute('data-on', state.switches[id]);
       if (id === 'pw') syncPwField();
+      if (id === 'burn') { paintLimitsInfo(); syncBurnHelp(); }   // burn changes the effective download cap
     });
   });
 }
@@ -173,6 +341,16 @@ function applySwitches() {
     btn.setAttribute('data-on', String(!!state.switches[btn.dataset.switch]));
   });
   syncPwField();
+  syncBurnHelp();
+}
+
+// Swap the burn row's own subtitle when "Delete after download" is on — cleaner
+// than an orphaned helper line below the divider.
+function syncBurnHelp() {
+  const sub = $('[data-sub="burn"]'); if (!sub) return;
+  const on = !!(state.switches && state.switches.burn);
+  sub.textContent = on ? 'Files are deleted right after the first download' : 'Burn after reading';
+  sub.classList.toggle('whitespace-nowrap', !on);
 }
 
 // Restore the deliver form (after send / error). resetState=true clears the
@@ -196,26 +374,7 @@ function syncPwField() {
   if (on) input.focus();
 }
 
-function bindExpiry() {
-  refs.expiryGroup.querySelectorAll('[data-expiry]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      // Pro-only options are gated for free/guest senders.
-      if (btn.dataset.tier === 'pro' && !isPro()) {
-        toast('Longer expiry is a Pro feature — upgrade to keep transfers up to a year.', 'brand');
-        setTimeout(() => location.assign('/upgrade'), 1100);
-        return;
-      }
-      state.expiry = btn.dataset.expiry;
-      refs.expiryGroup.querySelectorAll('[data-expiry]').forEach((b) => {
-        const on = b === btn;
-        b.className = 'expiry-chip inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[13px] font-medium transition-all ' +
-          (on ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-ink-150 text-ink-700 hover:border-ink-300') +
-          (b.dataset.tier === 'pro' && !isPro() ? ' opacity-60' : '');
-      });
-    });
-  });
-  gateProExpiry();
-}
+function bindExpiry() { renderExpiry(); }
 
 function sendingPanelHtml(pct) {
   return `<p class="text-[11px] font-semibold tracking-[.08em] uppercase text-ink-400 mb-2">Sending</p>
@@ -257,6 +416,10 @@ function sentPanelHtml(t) {
       <button type="button" data-copy-code="${t.code}" class="h-[34px] px-3.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-[13px] font-semibold whitespace-nowrap transition-colors">Copy code</button>
     </div>
     <p class="text-[11px] text-ink-400 mt-1.5">Share this code separately — recipients need it to unlock.</p>` : ''}
+    <div class="flex flex-col items-center gap-2 mt-4 pt-4 border-t border-ink-100">
+      <div data-qr data-qr-url="${t.linkFull}" class="p-3 bg-white rounded-xl ring-1 ring-ink-150"></div>
+      <span class="text-[11px] text-ink-400">Scan to open this transfer on any device</span>
+    </div>
     <button type="button" data-reset class="mt-4 h-[42px] px-5 rounded-full text-ink-700 hover:bg-ink-100 text-sm font-semibold transition-colors">New transfer</button>
   </div>`;
 }
@@ -359,6 +522,14 @@ function wireSentPanel() {
     navigator.clipboard?.writeText(e.currentTarget.dataset.copyCode).catch(() => {});
     toast('Access code copied', 'spark');
   });
+  // Render the QR straight away (shown by default on the success panel).
+  const qrHolder = $('[data-qr]', refs.deliver);
+  if (qrHolder) {
+    const raw = qrHolder.dataset.qrUrl || '';
+    const url = /^https?:\/\//.test(raw) ? raw : (location.origin + '/' + raw.replace(/^\/+/, ''));
+    try { window.BeamQR.render(qrHolder, url, 132); }
+    catch (err) { qrHolder.textContent = 'QR unavailable'; }
+  }
 }
 
 // Wire the access-code field's "New code" button (re-bound after each panel rebuild).
@@ -393,6 +564,7 @@ function rebindDeliver() {
 
 document.addEventListener('DOMContentLoaded', () => {
   refs.list = $('#fileList');
+  refs.list?.addEventListener('click', onListClick);   // delegated remove (bound once)
   refs.empty = $('#fileEmpty');
   refs.total = $('#fileTotal');
   refs.deliver = $('#deliverPanel');
@@ -438,6 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initGuestName();
   renderFiles();
 
-  // Re-gate Pro expiry chips once real plan info arrives (usage hydrates async).
-  document.addEventListener('beam:usage', gateProExpiry);
+  // Re-gate expiry chips + plan limits once real plan info arrives (usage hydrates async).
+  loadPlanLimits();
+  document.addEventListener('beam:usage', loadPlanLimits);
 });

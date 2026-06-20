@@ -168,6 +168,12 @@ class BeamApi {
   // ---- Profile / branding -------------------------------------------------
   profile = {
     update: (fields) => this.patch('/profile', fields),
+    avatar: (file) => {
+      // multipart upload; pass file=null + remove=1 to clear the photo.
+      const fd = new FormData();
+      if (file) fd.append('avatar', file); else fd.append('remove', '1');
+      return this.request('POST', '/profile/avatar', { body: fd });
+    },
     password: (current_password, password, password_confirmation) =>
       this.put('/profile/password', { current_password, password, password_confirmation }),
     deleteAccount: (password) => this.request('DELETE', '/account', { body: { password } }),

@@ -89,12 +89,10 @@
             </div>
 
             <p class="text-[11px] font-semibold tracking-[.08em] uppercase text-ink-400 mb-2 mt-5">Expires after</p>
-            <div class="flex flex-wrap gap-2" id="expiryGroup">
-                @foreach ([['1d', '1 day', 'free'], ['3d', '3 days', 'free'], ['7d', '7 days', 'free'], ['30d', '30 days', 'pro'], ['1y', '1 year', 'pro'], ['forever', 'Forever', 'pro']] as [$v, $label, $tier])
-                    <button type="button" data-expiry="{{ $v }}" data-tier="{{ $tier }}"
-                            class="expiry-chip inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[13px] font-medium transition-all {{ $v === '7d' ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-ink-150 text-ink-700 hover:border-ink-300' }}">{{ $label }}<span data-pro-tag class="hidden text-[10px] font-bold tracking-wide text-spark-600">PRO</span></button>
-                @endforeach
-            </div>
+            <div class="flex flex-wrap gap-2" id="expiryGroup"></div>
+            <div id="expiryCustomRow" class="hidden items-center gap-2 mt-2.5"></div>
+            <p data-plan-limits class="hidden flex-wrap text-[12px] text-ink-500 mt-3 items-center gap-2"></p>
+            <p data-expiry-upsell class="hidden text-[12px] text-brand-600 mt-2"></p>
 
             <p class="text-[11px] font-semibold tracking-[.08em] uppercase text-ink-400 mb-2 mt-5">Protection</p>
             <div>
@@ -104,7 +102,7 @@
                             <div class="w-9 h-9 rounded-lg bg-brand-50 text-brand-500 flex items-center justify-center flex-none"><x-icon :name="$icon" class="w-[18px] h-[18px]" /></div>
                             <div class="min-w-0">
                                 <div class="text-sm font-semibold text-ink-900 leading-tight whitespace-nowrap">{{ $t }}</div>
-                                <div class="text-xs text-ink-400 leading-tight mt-0.5">{{ $s }}</div>
+                                <div class="text-xs text-ink-400 leading-tight mt-0.5" data-sub="{{ $id }}">{{ $s }}</div>
                             </div>
                         </div>
                         <x-toggle :id="$id" :on="$on" />
@@ -117,7 +115,6 @@
                                        class="flex-1 h-10 px-3.5 rounded-xl border border-ink-200 text-[15px] font-mono tracking-wide text-ink-900 bg-white outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/30 transition placeholder:text-ink-300 placeholder:font-body placeholder:tracking-normal">
                                 <button type="button" id="pwRegen" title="Generate a new code" class="h-10 px-3 rounded-xl border border-ink-200 hover:bg-ink-50 text-ink-600 text-[13px] font-semibold transition-colors whitespace-nowrap">New code</button>
                             </div>
-                            <p class="text-[11px] text-ink-400 mt-1.5">Share this code with your recipient — they’ll need it to open the files.</p>
                         </div>
                     @endif
                 @endforeach
@@ -133,5 +130,6 @@
 @endsection
 
 @push('scripts')
+<script src="{{ asset('assets/js/qrcode.js') }}"></script>
 <script type="module" src="{{ asset('assets/js/page-send.js') }}"></script>
 @endpush

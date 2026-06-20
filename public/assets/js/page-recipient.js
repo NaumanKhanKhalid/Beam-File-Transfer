@@ -78,7 +78,7 @@ function filesView() {
           ? `<span class="flex items-center gap-1.5 text-xs text-warning-700 bg-warning-50 px-2.5 py-1 rounded-full font-mono whitespace-nowrap">${ic('clock', 'w-3.5 h-3.5')}<span data-expires="${t.expiresAt}">${fmtCountdown(t.expiresAt)}</span></span>`
           : `<span class="flex items-center gap-1.5 text-xs text-ink-400 font-mono whitespace-nowrap">${ic('clock', 'w-3.5 h-3.5')}Expires ${t.expires || ''}</span>`}
       </div>
-      <button type="button" data-download-all class="w-full h-[52px] rounded-full active:translate-y-px text-white font-semibold text-[17px] flex items-center justify-center gap-2 transition hover:brightness-105" style="background:${b?.accent || '#C6FF3D'};${b ? '' : 'color:#0E0F12;'}">${ic('download', 'w-[18px] h-[18px]')}Download all</button>
+      <button type="button" data-download-all class="w-full h-[52px] rounded-full active:translate-y-px text-white font-semibold text-[17px] flex items-center justify-center gap-2 transition hover:brightness-105" style="background:${b?.accent || '#C6FF3D'};${b ? '' : 'color:#0E0F12;'}">${ic('download', 'w-[18px] h-[18px]')}${t.files.length === 1 ? 'Download' : 'Download all'}</button>
       <div class="flex items-center justify-center gap-4 mt-3.5">
         <span class="flex items-center gap-2 text-xs text-ink-400">${ic('shield', 'w-3.5 h-3.5 text-success-500')}End-to-end encrypted</span>
         <button type="button" data-show-qr class="flex items-center gap-1.5 text-xs font-semibold text-ink-500 hover:text-ink-900 px-2.5 py-1 rounded-full transition-colors">${ic('inbox', 'w-3.5 h-3.5')}Show QR</button>
@@ -95,10 +95,11 @@ function lockView() {
     <div class="w-[68px] h-[68px] rounded-2xl bg-brand-50 text-brand-500 flex items-center justify-center mx-auto mb-5">${ic('lock', 'w-8 h-8')}</div>
     <h2 class="font-display font-bold text-[22px] text-ink-900 tracking-tight">This transfer is protected</h2>
     <p class="text-sm text-ink-400 mt-1.5"><b class="text-ink-700">${t.sender || 'Mara Lin'}</b> sent you ${t.files.length} files. Enter the access code to open them.</p>
-    <div id="codeBoxes" class="flex justify-center gap-2 mt-6">
-      ${[0, 1, 2, 3, 4, 5].map((i) => `<div class="codecell w-11 h-14 rounded-xl border-2 border-ink-150 bg-ink-50 flex items-center justify-center font-mono font-bold text-2xl text-ink-900" data-ci="${i}"></div>`).join('')}
+    <div id="codeBoxes" class="flex justify-center gap-2 mt-6 cursor-text">
+      ${[0, 1, 2, 3, 4, 5].map((i) => `<div class="codecell w-11 h-14 rounded-xl border-2 border-ink-150 bg-ink-50 flex items-center justify-center font-mono font-bold text-2xl text-ink-900 transition-all" data-ci="${i}"></div>`).join('')}
     </div>
     <input id="codeInput" inputmode="numeric" maxlength="6" autocomplete="one-time-code" class="absolute opacity-0 left-1/2 -translate-x-1/2 w-[280px] h-14 cursor-pointer" style="top:118px">
+    <p id="codeHint" class="text-[12px] text-ink-400 mt-3">Tap the boxes and type the 6-digit code</p>
     <div id="codeErr" class="text-[13px] text-danger-500 font-medium mt-3 h-5"></div>
     <button type="button" data-unlock class="w-full h-[52px] mt-1 rounded-full bg-spark-500 hover:bg-spark-600 active:translate-y-px text-ink-900 font-semibold text-[16px] flex items-center justify-center gap-2 transition">${ic('shield', 'w-[18px] h-[18px]')}Unlock files</button>
     ${t.demo ? `<p class="text-[12px] text-ink-300 mt-4 font-mono">Demo code: <b class="text-brand-600">${t.password}</b></p>` : ''}
@@ -134,19 +135,30 @@ function render() {
 function wireLock() {
   const inp = document.getElementById('codeInput');
   const boxes = document.getElementById('codeBoxes');
+  let focused = false;
   const paint = () => {
     const v = inp.value.replace(/\D/g, '').slice(0, 6); inp.value = v;
+    const active = Math.min(v.length, 5);
     document.querySelectorAll('.codecell').forEach((c, i) => {
       c.textContent = v[i] || '';
-      c.classList.toggle('border-brand-500', i === v.length);
-      c.classList.toggle('border-ink-150', i !== v.length);
+      const isActive = focused && i === v.length && v.length < 6;
+      // Filled cells get a solid brand border; the cell awaiting input shows a
+      // clear focus ring + blinking caret so it's obvious where typing lands.
+      c.classList.toggle('border-brand-500', isActive || !!v[i]);
+      c.classList.toggle('border-ink-150', !isActive && !v[i]);
+      c.classList.toggle('ring-2', isActive);
+      c.classList.toggle('ring-brand-500/25', isActive);
+      c.classList.toggle('bg-white', isActive || !!v[i]);
+      c.classList.toggle('bg-ink-50', !isActive && !v[i]);
+      c.classList.toggle('code-caret', isActive);
     });
     document.getElementById('codeErr').textContent = '';
-    if (v.length === 6) setTimeout(submit, 120);
+    const unlockBtn = card.querySelector('[data-unlock]');
+    if (unlockBtn) unlockBtn.disabled = v.length < 6;   // enabled only when all 6 in
   };
   async function submit() {
     const v = inp.value;
-    if (v.length < 6) { document.getElementById('codeErr').textContent = 'Enter all 6 digits.'; return; }
+    if (v.length < 6) { document.getElementById('codeErr').textContent = 'Enter all 6 digits.'; inp.focus(); return; }
     let ok = String(v) === String(t.password);
     if (!t.demo) {
       try { const r = await api.transfers.unlock(slug, v); if (r && (r.files || r.data)) { t.files = (r.files || r.data.files).map(mapFile); ok = true; } } catch (e) { ok = false; }
@@ -154,15 +166,18 @@ function wireLock() {
     if (ok) { unlocked = true; render(); toast('Unlocked — files are ready', 'success'); }
     else {
       document.getElementById('codeErr').textContent = 'Incorrect code. Try again.';
-      document.querySelectorAll('.codecell').forEach((c) => { c.classList.add('border-danger-500'); c.classList.remove('border-ink-150', 'border-brand-500'); });
+      document.querySelectorAll('.codecell').forEach((c) => { c.classList.add('border-danger-500'); c.classList.remove('border-ink-150', 'border-brand-500', 'ring-2', 'ring-brand-500/25'); });
       boxes.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(0)' }], { duration: 240 });
       inp.value = '';
     }
   }
-  inp.addEventListener('input', paint);
+  inp.addEventListener('input', paint);   // NOTE: no auto-submit — the recipient must click “Unlock”.
+  inp.addEventListener('focus', () => { focused = true; paint(); });
+  inp.addEventListener('blur', () => { focused = false; paint(); });
   inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   boxes.addEventListener('click', () => inp.focus());
   card.querySelector('[data-unlock]').addEventListener('click', submit);
+  paint();
   setTimeout(() => inp.focus(), 50);
 }
 
@@ -243,27 +258,104 @@ function triggerDownload(f) {
   return true;
 }
 
-function downloadOne(i) {
+// Map a 410/404 API error to the right "gone" screen (shared by load + download).
+function setGoneFromError(e) {
+  const msg = (e && e.first) || '';
+  if (e && e.status === 404) { goneInfo = { icon: 'search', title: 'Transfer not found', message: 'This link is invalid or has been removed. Double-check the URL with whoever sent it.' }; return; }
+  if (/expire/i.test(msg)) { goneInfo = { icon: 'clock', title: 'This transfer has expired', message: 'The sender set a time limit and it has passed — these files are no longer available.' }; return; }
+  if (/limit/i.test(msg)) { goneInfo = { icon: 'download', title: 'Download limit reached', message: 'This transfer hit the maximum number of downloads its sender allowed, so it’s no longer available.' }; return; }
+  goneInfo = { icon: 'zap', title: 'This transfer is gone', message: 'It was deleted after download, so it’s no longer available.', note: 'Securely erased · nothing left on our servers' };
+}
+
+// Re-check the transfer is still downloadable BEFORE navigating to a file/zip URL,
+// so a gone link shows our graceful screen instead of the server's raw 410 page.
+async function ensureAvailable() {
+  if (!slug || slug === 'demo' || t.demo) return true;
+  try { await api.transfers.get(slug); return true; }
+  catch (e) {
+    if (e instanceof ApiError && (e.status === 410 || e.status === 404)) { setGoneFromError(e); render(); return false; }
+    return true;   // network hiccup — let the download attempt proceed
+  }
+}
+
+// Download each file individually (used as a fallback when the server has no ZIP).
+function downloadEach(btn) {
+  const list = t.files.map((_, i) => i);
+  const n = list.length;
+  btn.disabled = true;
+  btn.className = 'w-full h-[52px] rounded-full bg-spark-500 text-ink-900 font-semibold text-[17px] flex items-center justify-center gap-2 transition';
+  let done = 0;
+  list.forEach((i, k) => setTimeout(() => {
+    triggerDownload(t.files[i]); markDownloaded(i); done++;
+    if (done < n) { btn.innerHTML = `${ic('download', 'w-[18px] h-[18px]')}Saving… ${done}/${n}`; }
+    else {
+      btn.innerHTML = `${ic('check', 'w-[18px] h-[18px]', 2.6)}All ${n} saved`;
+      btn.className = 'w-full h-[52px] rounded-full bg-success-500 text-white font-semibold text-[17px] flex items-center justify-center gap-2 transition';
+      if (t.burn) setTimeout(() => { burned = true; render(); toast('Files deleted after download 🔥', 'brand'); }, 900);
+    }
+  }, k * 350));
+}
+
+async function downloadOne(i) {
   const f = t.files[i];
+  if (slug && slug !== 'demo' && !t.demo && !(await ensureAvailable())) return;
   const real = triggerDownload(f);
   markDownloaded(i);
   if (!real) toast('Demo file — send your own from the Sender app to download for real.', 'brand');
 }
 
-function downloadAll(btn) {
-  // Real transfer → one ZIP from the server (keeps folder structure).
+// Restore the “Download all” button to its idle state. `again` = label it for a
+// repeat download after a successful one.
+function resetDownloadAllBtn(btn, again) {
+  btn.disabled = false;
+  btn.innerHTML = `${ic('download', 'w-[18px] h-[18px]')}${again ? 'Download again' : 'Download all'}`;
+  btn.className = 'w-full h-[52px] rounded-full bg-spark-500 text-ink-900 font-semibold text-[17px] flex items-center justify-center gap-2 transition';
+}
+
+async function downloadAll(btn) {
+  // Single file → download it directly (no pointless one-file ZIP).
+  if (slug && slug !== 'demo' && !t.demo && t.files.length === 1) {
+    if (!(await ensureAvailable())) return;
+    triggerDownload(t.files[0]);
+    markDownloaded(0);
+    btn.innerHTML = `${ic('check', 'w-[18px] h-[18px]', 2.6)}Downloaded`;
+    btn.className = 'w-full h-[52px] rounded-full bg-success-500 text-white font-semibold text-[17px] flex items-center justify-center gap-2 transition';
+    if (t.burn) setTimeout(() => { burned = true; render(); toast('File deleted after download 🔥', 'brand'); }, 1200);
+    else { toast('Downloading…', 'success'); setTimeout(() => resetDownloadAllBtn(btn, true), 1600); }   // allow re-download
+    return;
+  }
+
+  // Multiple files → one streamed ZIP from the server. We navigate straight to
+  // the URL so the browser streams it to disk with its own progress bar (no
+  // in-memory buffering, download starts instantly). The availability preflight
+  // catches gone/expired/limit first; the zipAvailable flag (from the GET) tells
+  // us upfront whether to ZIP or fall back to individual files.
   if (slug && slug !== 'demo' && !t.demo && t.files.length) {
+    // Show the loading state IMMEDIATELY on click — the availability check runs
+    // after, so the button never sits dead while the network round-trips.
     btn.disabled = true;
-    btn.innerHTML = `${ic('download', 'w-[18px] h-[18px]')}Preparing ZIP…`;
-    const a = document.createElement('a'); a.href = api.transfers.zipUrl(slug);
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => {
-      t.files.forEach((_, i) => markDownloaded(i));
-      btn.innerHTML = `${ic('check', 'w-[18px] h-[18px]', 2.6)}Downloaded as ZIP`;
-      btn.className = 'w-full h-[52px] rounded-full bg-success-500 text-white font-semibold text-[17px] flex items-center justify-center gap-2 transition';
-      if (t.burn) setTimeout(() => { burned = true; render(); toast('Files deleted after download 🔥', 'brand'); }, 1200);
-      else toast('Downloading as ZIP…', 'success');
-    }, 1400);
+    btn.innerHTML = `${ic('download', 'w-[18px] h-[18px]')}Starting ZIP…`;
+    if (!(await ensureAvailable())) { resetDownloadAllBtn(btn); return; }
+
+    if (t.zipAvailable === false) {        // server can't ZIP → download one by one
+      toast('Downloading files individually…', 'brand');
+      downloadEach(btn);
+      return;
+    }
+
+    // Native streaming download: hidden iframe pointed at the ZIP URL. The browser
+    // handles the save (and shows real progress) without us buffering anything.
+    const frame = document.createElement('iframe');
+    frame.style.display = 'none';
+    frame.src = api.transfers.zipUrl(slug);
+    document.body.appendChild(frame);
+    setTimeout(() => frame.remove(), 60000);
+
+    t.files.forEach((_, i) => markDownloaded(i));
+    btn.innerHTML = `${ic('check', 'w-[18px] h-[18px]', 2.6)}Downloaded as ZIP`;
+    btn.className = 'w-full h-[52px] rounded-full bg-success-500 text-white font-semibold text-[17px] flex items-center justify-center gap-2 transition';
+    if (t.burn) setTimeout(() => { burned = true; render(); toast('Files deleted after download 🔥', 'brand'); }, 1400);
+    else { toast('Downloading ZIP…', 'success'); setTimeout(() => resetDownloadAllBtn(btn, true), 1800); }   // allow re-download
     return;
   }
 
@@ -315,21 +407,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         total: d.total || (d.total_bytes != null ? humanSize(d.total_bytes) : ''),
         expires: d.expires || '', expiresAt: d.expires_at ? Date.parse(d.expires_at) : null,
         password: d.protected || d.password_required || d.locked || false, burn: d.burn || false, demo: false,
+        zipAvailable: d.zip_available !== false,
         files: (d.files || []).map(mapFile),
       };
     } catch (e) {
       // A real transfer that's gone (burned / expired / removed) must show the
       // "gone" page on refresh — NOT fall back to the demo lock screen.
-      if (e instanceof ApiError && e.status === 410) {
-        const expired = /expire/i.test(e.first || '');
-        goneInfo = expired
-          ? { icon: 'clock', title: 'This transfer has expired', message: 'The sender set a time limit and it has passed — these files are no longer available.' }
-          : { icon: 'zap', title: 'This transfer is gone', message: 'It was set to delete after the first download, so it’s no longer available.', note: 'Securely erased · nothing left on our servers' };
-        render();
-        return;
-      }
-      if (e instanceof ApiError && e.status === 404) {
-        goneInfo = { icon: 'search', title: 'Transfer not found', message: 'This link is invalid or has been removed. Double-check the URL with whoever sent it.' };
+      if (e instanceof ApiError && (e.status === 410 || e.status === 404)) {
+        setGoneFromError(e);
         render();
         return;
       }

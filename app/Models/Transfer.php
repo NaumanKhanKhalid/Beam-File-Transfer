@@ -78,7 +78,12 @@ class Transfer extends Model
             '30d' => 43200, '60d' => 86400, '1y' => 525600, 'forever' => null,
         ];
         $token  = $token ?: '7d';
-        $reqMin = array_key_exists($token, $map) ? $map[$token] : 10080;
+        // Custom expiry: "m:<minutes>" (e.g. m:45) — clamped to the plan max below.
+        if (str_starts_with($token, 'm:')) {
+            $reqMin = max(1, (int) substr($token, 2));
+        } else {
+            $reqMin = array_key_exists($token, $map) ? $map[$token] : 10080;
+        }
         if ($planMaxMin === null) {
             return $reqMin === null ? null : now()->addMinutes($reqMin);   // unlimited plan honours the request
         }

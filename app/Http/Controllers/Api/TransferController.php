@@ -67,6 +67,16 @@ class TransferController extends Controller
         // One-time guest pass: a guest may send only once per IP, ever.
         if (! $user && $resp = $this->guestPassGuard($request)) return $resp;
 
+        // Per-plan file-count limit (null = unlimited).
+        $plan0 = $user ? ($user->plan ?: 'free') : 'free';
+        $fileLimit = \App\Support\PlanRepo::get($plan0, 'file_limit');
+        if ($fileLimit !== null && count($files) > $fileLimit) {
+            return response()->json([
+                'message' => "Your plan allows up to {$fileLimit} files per transfer. Upgrade to send more.",
+                'code'    => 'file_limit',
+            ], 422);
+        }
+
         // Reject if this upload would push the sender over their quota.
         $incoming = collect($files)->sum(fn ($f) => $f->getSize());
         if ($resp = $this->quotaGuard($request, $user, $incoming)) return $resp;
@@ -225,7 +235,9 @@ class TransferController extends Controller
             'burn_after_download' => $request->boolean('burn'),
             'notify_on_download'  => $request->boolean('notify', true),
             'expires_at'          => $expiresAt,
-            'download_limit'      => \App\Support\PlanRepo::get($plan, 'download_limit'),   // null = unlimited
+            // Plan download cap (null = unlimited). Burn-after-download is handled
+            // separately via burned_at, so the two never fight over the count.
+            'download_limit'      => \App\Support\PlanRepo::get($plan, 'download_limit'),
             'brand'               => ($request->boolean('branded') && $user?->brand_enabled)
                 ? ['name' => $user->brand_name, 'accent' => $user->brand_accent,
                    'logo' => $user->brand_logo_path ? asset('storage/' . $user->brand_logo_path) : null]
@@ -261,6 +273,9 @@ class TransferController extends Controller
         }
         if ($transfer->isBurned()) {
             return response()->json(['message' => 'This transfer was deleted after download.'], 410);
+        }
+        if ($transfer->download_limit !== null && $transfer->download_count >= $transfer->download_limit) {
+            return response()->json(['message' => 'This transfer has reached its download limit.'], 410);
         }
 
         // Hide the file list (and download links) until the code is verified.
@@ -300,12 +315,59 @@ class TransferController extends Controller
      * GET /api/t/{slug}/zip — stream every file in one .zip.
      * Same gate as single-file download (expired/burned only); counts as one download.
      */
-    public function zip(string $slug): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function zip(string $slug): \Symfony\Component\HttpFoundation\Response
     {
         $transfer = Transfer::where('slug', $slug)->with('files')->firstOrFail();
         abort_if($transfer->isExpired() || $transfer->isBurned(), 410);
         abort_if($transfer->download_limit !== null && $transfer->download_count >= $transfer->download_limit, 410, 'This transfer has reached its download limit.');
         abort_if($transfer->files->isEmpty(), 404);
+
+        $zipName = (\Illuminate\Support\Str::slug($transfer->title ?: 'beam-transfer') ?: 'beam-transfer') . '.zip';
+
+        // Count the download + honour burn before sending the body.
+        $markDownloaded = function () use ($transfer) {
+            $transfer->increment('download_count');
+            if ($transfer->burn_after_download && ! $transfer->isBurned()) {
+                $transfer->update(['burned_at' => now()]);
+            }
+            try { event(new \App\Events\TransferDownloaded($transfer->refresh())); } catch (\Throwable $e) { /* no-op */ }
+        };
+
+        // BEST PATH — ZipStream: stream the .zip straight to the client with no
+        // temp file and constant memory, so the download starts INSTANTLY (no
+        // "build the whole archive first" wait). STORE = no wasteful recompress.
+        if (class_exists(\ZipStream\ZipStream::class)) {
+            $files = $transfer->files;
+            $markDownloaded();
+            return response()->streamDownload(function () use ($files) {
+                try {
+                    $zip = new \ZipStream\ZipStream(
+                        outputName: 'archive.zip',
+                        sendHttpHeaders: false,
+                        defaultCompressionMethod: \ZipStream\CompressionMethod::STORE,
+                    );
+                } catch (\Throwable $e) {
+                    $zip = new \ZipStream\ZipStream('archive.zip');   // v2 fallback
+                }
+                foreach ($files as $f) {
+                    $abs = Storage::path($f->storage_path);
+                    if (! is_file($abs)) continue;
+                    $fh = fopen($abs, 'rb');
+                    if ($fh === false) continue;
+                    try { $zip->addFileFromStream($f->name, $fh); }
+                    catch (\Throwable $e) { /* skip unreadable file */ }
+                    finally { fclose($fh); }
+                }
+                $zip->finish();
+            }, $zipName, ['Content-Type' => 'application/zip']);
+        }
+
+        // FALLBACK — ext-zip (ZipArchive): build a temp .zip with STORE, then stream
+        // it. Still fast (no compression). If neither is available, tell the client
+        // so it can download files one by one.
+        if (! class_exists(\ZipArchive::class)) {
+            return response()->json(['message' => 'ZIP isn’t available on this server.', 'code' => 'zip_unavailable'], 501);
+        }
 
         $tmp = tempnam(sys_get_temp_dir(), 'beamzip');
         $zip = new \ZipArchive();
@@ -314,17 +376,18 @@ class TransferController extends Controller
             $abs = Storage::path($f->storage_path);
             if (is_file($abs)) {
                 $zip->addFile($abs, $f->name);   // $f->name keeps folder paths (e.g. "deck/logo.png")
+                // STORE (no compression): transfer payloads are mostly already-
+                // compressed media, so deflating them just burns CPU/time for a
+                // negligible size win. This makes ZIP assembly near-instant.
+                if (method_exists($zip, 'setCompressionName')) {
+                    $zip->setCompressionName($f->name, \ZipArchive::CM_STORE);
+                }
             }
         }
         $zip->close();
 
-        $transfer->increment('download_count');
-        if ($transfer->burn_after_download && ! $transfer->isBurned()) {
-            $transfer->update(['burned_at' => now()]);
-        }
-        try { event(new \App\Events\TransferDownloaded($transfer->refresh())); } catch (\Throwable $e) { /* no-op */ }
+        $markDownloaded();
 
-        $zipName = (\Illuminate\Support\Str::slug($transfer->title ?: 'beam-transfer') ?: 'beam-transfer') . '.zip';
         return response()->download($tmp, $zipName, ['Content-Type' => 'application/zip'])->deleteFileAfterSend(true);
     }
 

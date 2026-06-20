@@ -8,6 +8,13 @@
         return round($b / (1024 ** $i), $i ? 1 : 0) . ' ' . $u[$i];
     };
     $total = $transfer->files->sum('size_bytes');
+    // Brand snapshot (Pro senders) + sender photo, so the email matches the
+    // recipient download page and feels personal/professional.
+    $brand     = $transfer->brand ?? null;
+    $accent    = $brand['accent'] ?? '#4B3AFF';
+    $brandName = $brand['name'] ?? null;
+    $brandLogo = $brand['logo'] ?? null;
+    $avatar    = $transfer->user?->avatarUrl();
     // Brand-ish color per file kind for the little type badge.
     $kindColor = ['image' => '#18B368', 'video' => '#4B3AFF', 'audio' => '#F5A524', 'pdf' => '#F4384F', 'doc' => '#2C20B0', 'zip' => '#6B7280'];
     $ext = fn ($n) => strtoupper(substr(strrchr($n, '.') ?: 'FILE', 1, 4) ?: 'FILE');
@@ -20,19 +27,29 @@
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #ECEEF1;box-shadow:0 1px 2px rgba(16,17,21,.04);">
 
-        {{-- Header --}}
-        <tr><td style="background:#0E0F12;padding:20px 28px;">
-          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-            <td style="vertical-align:middle;"><span style="display:inline-block;width:30px;height:30px;border-radius:8px;background:#C6FF3D;text-align:center;line-height:30px;font-weight:800;color:#0E0F12;font-size:16px;">B</span></td>
-            <td style="vertical-align:middle;padding-left:10px;font-size:19px;font-weight:700;color:#ffffff;letter-spacing:-.02em;">Beam</td>
-          </tr></table>
-        </td></tr>
+        {{-- Header (branded for Pro senders, otherwise Beam) --}}
+        @if ($brandLogo)
+          <tr><td style="background:{{ $accent }};padding:20px 28px;"><img src="{{ $brandLogo }}" alt="{{ $brandName ?: 'Logo' }}" style="height:30px;display:block;"></td></tr>
+        @elseif ($brandName)
+          <tr><td style="background:{{ $accent }};padding:20px 28px;font-size:19px;font-weight:700;color:#ffffff;letter-spacing:-.02em;">{{ $brandName }}</td></tr>
+        @else
+          <tr><td style="background:#0E0F12;padding:20px 28px;">
+            <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+              <td style="vertical-align:middle;"><span style="display:inline-block;width:30px;height:30px;border-radius:8px;background:#C6FF3D;text-align:center;line-height:30px;font-weight:800;color:#0E0F12;font-size:16px;">B</span></td>
+              <td style="vertical-align:middle;padding-left:10px;font-size:19px;font-weight:700;color:#ffffff;letter-spacing:-.02em;">Beam</td>
+            </tr></table>
+          </td></tr>
+        @endif
 
-        {{-- Greeting: sender avatar + headline + meta --}}
+        {{-- Greeting: sender photo/avatar + headline + meta --}}
         <tr><td style="padding:30px 28px 0;">
           <table role="presentation" cellpadding="0" cellspacing="0"><tr>
             <td style="vertical-align:middle;">
-              <span style="display:inline-block;width:44px;height:44px;border-radius:999px;background:#4B3AFF;color:#fff;text-align:center;line-height:44px;font-weight:700;font-size:16px;">{{ $initials }}</span>
+              @if ($avatar)
+                <img src="{{ $avatar }}" alt="{{ $sender }}" width="44" height="44" style="width:44px;height:44px;border-radius:999px;object-fit:cover;display:block;">
+              @else
+                <span style="display:inline-block;width:44px;height:44px;border-radius:999px;background:{{ $accent }};color:#fff;text-align:center;line-height:44px;font-weight:700;font-size:16px;">{{ $initials }}</span>
+              @endif
             </td>
             <td style="vertical-align:middle;padding-left:14px;">
               <div style="font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1.25;color:#0E0F12;">{{ $sender }} sent you {{ $count }} file{{ $count === 1 ? '' : 's' }}</div>
@@ -44,7 +61,7 @@
         {{-- Optional message --}}
         @if ($transfer->message)
         <tr><td style="padding:18px 28px 0;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F7F8FA;border-left:3px solid #C6FF3D;border-radius:8px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F7F8FA;border-left:3px solid {{ $accent }};border-radius:8px;">
             <tr><td style="padding:12px 16px;font-size:14px;line-height:1.55;color:#3A4049;">“{{ $transfer->message }}”</td></tr>
           </table>
         </td></tr>
@@ -89,12 +106,20 @@
         <tr><td align="center" style="padding:26px 28px 8px;">
           <a href="{{ $link }}" style="display:inline-block;background:#C6FF3D;color:#0E0F12;font-size:16px;font-weight:700;text-decoration:none;padding:15px 40px;border-radius:999px;box-shadow:0 6px 18px rgba(198,255,61,.45);">Get your files →</a>
         </td></tr>
-        <tr><td style="padding:8px 28px 30px;">
+        <tr><td style="padding:8px 28px 22px;">
           <p style="margin:14px 0 0;font-size:12px;line-height:1.6;color:#9AA1AC;text-align:center;">
             @if ($transfer->expires_at) This link expires {{ $transfer->expires_at->diffForHumans() }}.<br>@endif
             Button not working? Paste this link:<br>
             <a href="{{ $link }}" style="color:#4B3AFF;word-break:break-all;">{{ $link }}</a>
           </p>
+        </td></tr>
+        {{-- Trust line --}}
+        <tr><td style="padding:0 28px 28px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #F1F3F5;">
+            <tr><td align="center" style="padding-top:16px;font-size:12px;color:#9AA1AC;">
+              🔒 Private &amp; encrypted — only people with this link can open the files.
+            </td></tr>
+          </table>
         </td></tr>
       </table>
 

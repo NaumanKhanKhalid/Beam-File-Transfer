@@ -114,6 +114,9 @@ const planLabel = (p) => ({ free: 'Free plan', pro: 'Pro plan', business: 'Busin
 // A dismissible bar shown when the signed-in user hasn't confirmed their email.
 function maybeShowVerifyBanner(u) {
   if (!u || u.verified) { document.getElementById('verifyBar')?.remove(); return; }
+  // Admin pages are a centered modal layout with no <main>; the banner would
+  // overlap the card. Skip it there (admins can verify from the main app).
+  if (location.pathname.startsWith('/admin')) return;
   if (sessionStorage.getItem('beam.verifyDismissed') === '1') return;
   if (document.getElementById('verifyBar')) return;
   const bar = document.createElement('div');
@@ -154,7 +157,7 @@ function renderAccount(u) {
           <button type="button" data-logout class="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-danger-400 hover:bg-danger-500/10 transition-colors text-left">${ic('logout', 'w-[15px] h-[15px]')}Log out</button>
         </div>
         <button type="button" data-acct-toggle class="flex items-center gap-2.5 px-2 py-2 w-full text-left rounded-xl hover:bg-white/5 transition-colors group">
-          <span class="w-8 h-8 rounded-full bg-brand-500 text-white font-display font-bold text-xs flex items-center justify-center flex-none">${u.initials || initialsOf(u.name)}</span>
+          <span class="w-8 h-8 rounded-full bg-brand-500 text-white font-display font-bold text-xs flex items-center justify-center flex-none overflow-hidden bg-cover bg-center" ${u.avatar ? `style="background-image:url('${u.avatar}')"` : ''}>${u.avatar ? '' : (u.initials || initialsOf(u.name))}</span>
           <div class="leading-tight min-w-0 flex-1">
             <div class="text-white text-[13px] font-semibold truncate">${u.name}</div>
             <div class="text-ink-400 text-[11px]">${planLabel(u.plan)}</div>
@@ -192,19 +195,41 @@ function renderAccount(u) {
   }
 }
 
+function renderAccountSkeleton() {
+  // Shown only for the brief moment between page paint and /me resolving when
+  // we have no cached identity — prevents the guest "Log in / Sign up" card from
+  // flashing for an already-authenticated user.
+  const region = document.querySelector('[data-account-region]');
+  if (region) {
+    region.innerHTML = `
+      <div class="pt-3"><div class="flex items-center gap-2.5 px-2 py-2 rounded-xl">
+        <span class="w-8 h-8 rounded-full bg-white/10 animate-pulse flex-none"></span>
+        <div class="flex-1 min-w-0 flex flex-col gap-1.5">
+          <span class="block h-2.5 w-24 rounded bg-white/10 animate-pulse"></span>
+          <span class="block h-2 w-16 rounded bg-white/10 animate-pulse"></span>
+        </div>
+      </div></div>`;
+  }
+  const actions = document.querySelector('[data-topbar-actions]');
+  if (actions) actions.innerHTML = `<span class="h-[42px] w-[120px] rounded-full bg-ink-100 animate-pulse"></span>`;
+}
+
 async function hydrateAccount() {
   if (!api.authenticated) return;
   // Paint the cached identity instantly so a refresh doesn't flash the guest
-  // "Log in / Create account" card before /me resolves.
+  // "Log in / Create account" card before /me resolves. With no cache yet, show
+  // a neutral skeleton instead of the guest markup (still no flash of "Log in").
+  let painted = false;
   try {
     const c = JSON.parse(localStorage.getItem('beam.cache.account') || 'null');
-    if (c && c.name) renderAccount(c);
+    if (c && c.name) { renderAccount(c); painted = true; }
   } catch (e) { /* ignore bad cache */ }
+  if (!painted) renderAccountSkeleton();
   try {
     const u = await api.auth.me();
     renderAccount(u);
     maybeShowVerifyBanner(u);
-    try { localStorage.setItem('beam.cache.account', JSON.stringify({ name: u.name, plan: u.plan, initials: u.initials })); } catch (e) { /* quota */ }
+    try { localStorage.setItem('beam.cache.account', JSON.stringify({ name: u.name, plan: u.plan, initials: u.initials, avatar: u.avatar || null })); } catch (e) { /* quota */ }
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) { api.setToken(null); localStorage.removeItem('beam.cache.account'); }
   }

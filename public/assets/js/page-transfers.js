@@ -38,7 +38,13 @@ function cardHtml(t, i = 0) {
   const s = statusOf(t);
   const count = t.files_count ?? (t.files || []).length ?? 0;
   const meta = `${count} file${count === 1 ? '' : 's'} · ${humanSize(t.total_bytes || 0)}`;
-  return `<div data-slug="${t.slug || ''}" role="button" tabindex="0" style="animation-delay:${Math.min(i, 10) * 45}ms" class="card-in bg-white border border-ink-100 rounded-xl p-[18px] shadow-sm hover:shadow-md hover:-translate-y-0.5 transition cursor-pointer flex flex-col gap-3.5">
+  const gone = t.burned || t.expired;
+  const url = (t.link && /^https?:/.test(t.link)) ? t.link : `${location.origin}/r/${t.slug || ''}`;
+  const actions = gone
+    ? `<span class="flex items-center gap-1.5 text-[12px] text-ink-400">${ic('lock', 'w-[14px] h-[14px]')}Link no longer active</span>`
+    : `<button type="button" data-copy-link="${url}" data-protected="${t.protected ? 1 : 0}" class="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-ink-50 hover:bg-brand-50 hover:text-brand-600 text-ink-700 text-[12.5px] font-semibold transition-colors">${ic('copy', 'w-[14px] h-[14px]')}Copy link</button>
+       <button type="button" data-open="${url}" class="inline-flex items-center gap-1.5 h-8 px-3 rounded-full hover:bg-ink-50 text-ink-500 hover:text-ink-900 text-[12.5px] font-semibold transition-colors">${ic('arrowUR', 'w-[14px] h-[14px]')}Open</button>`;
+  return `<div data-slug="${t.slug || ''}" style="animation-delay:${Math.min(i, 10) * 45}ms" class="card-in bg-white border border-ink-100 rounded-xl p-[18px] shadow-sm hover:shadow-md transition flex flex-col gap-3.5">
     <div class="flex items-start gap-3">
       <div class="w-12 h-12 rounded-xl bg-brand-50 flex items-center justify-center flex-none text-brand-500">${ic('download2', 'w-6 h-6')}</div>
       <div class="flex-1 min-w-0"><div class="font-display font-bold text-[17px] text-ink-900 truncate tracking-tight">${t.title || 'Untitled transfer'}</div><div class="font-mono text-xs text-ink-400 mt-0.5">${meta}</div></div>
@@ -48,6 +54,7 @@ function cardHtml(t, i = 0) {
       <span class="flex items-center gap-1.5 text-[13px] text-ink-700">${ic('download', 'w-[15px] h-[15px] text-ink-400')}<b class="font-mono text-ink-900" data-count>${t.download_count ?? 0}</b> downloads</span>
       <span class="flex items-center gap-1.5 text-[13px] text-ink-700">${ic('clock', 'w-[15px] h-[15px] text-ink-400')}${expiryText(t.expires_at, t.expired)}</span>
     </div>
+    <div class="flex items-center gap-1.5 -mb-0.5">${actions}</div>
   </div>`;
 }
 
@@ -238,6 +245,25 @@ function startPolling() {
 document.addEventListener('DOMContentLoaded', () => {
   const btn = document.querySelector('[data-view-all]');
   if (btn) btn.addEventListener('click', () => { _expanded = !_expanded; renderGrid(); });
+
+  // Card actions (delegated): copy the recipient link / open the transfer.
+  const grid = document.getElementById('txGrid');
+  if (grid) grid.addEventListener('click', (e) => {
+    const copyBtn = e.target.closest('[data-copy-link]');
+    if (copyBtn) {
+      const url = copyBtn.dataset.copyLink;
+      navigator.clipboard?.writeText(url).catch(() => {});
+      const protectedT = copyBtn.dataset.protected === '1';
+      toast(protectedT ? 'Link copied — remember to share the access code too' : 'Link copied', protectedT ? 'brand' : 'spark');
+      const orig = copyBtn.innerHTML;
+      copyBtn.innerHTML = `${ic('check', 'w-[14px] h-[14px]')}Copied`;
+      setTimeout(() => { copyBtn.innerHTML = orig; }, 1500);
+      return;
+    }
+    const openBtn = e.target.closest('[data-open]');
+    if (openBtn) { window.open(openBtn.dataset.open, '_blank', 'noopener'); }
+  });
+
   // Live search — filters the loaded transfers by title as you type.
   const search = document.querySelector('[data-search]');
   if (search) {

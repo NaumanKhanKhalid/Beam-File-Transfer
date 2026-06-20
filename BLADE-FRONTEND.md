@@ -158,9 +158,14 @@ password / branding rules as a normal upload). Small uploads keep the simple one
 
 ## Account settings
 
-`Settings` page (signed-in only): change password (`PUT /api/profile/password`, verifies
-current, signs out other devices) and delete account (`DELETE /api/account`, password
-confirm, wipes transfers + files + logo + tokens).
+`Settings` page (signed-in only): upload a **profile photo** (`POST /api/profile/avatar`,
+multipart, jpg/png/webp ≤4 MB — stored on the `public` disk; `remove=1` clears it back to
+initials; guests have no account so the control is hidden for them), change password
+(`PUT /api/profile/password`, verifies current, signs out other devices) and delete
+account (`DELETE /api/account`, password confirm, wipes transfers + files + logo + tokens).
+The avatar shows in the sidebar account card and on Settings; it reuses the `users.avatar_url`
+column (also set by Google sign-in). **Run `php artisan storage:link` once** so uploaded
+photos/logos are web-served.
 
 ## Scheduled cleanup
 

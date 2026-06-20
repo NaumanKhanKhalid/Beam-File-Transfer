@@ -16,6 +16,7 @@ class UserResource extends JsonResource
             'plan'     => $this->plan,
             'is_admin' => $this->is_admin,
             'verified' => (bool) $this->email_verified_at,
+            'avatar'   => $this->avatarUrl(),
             'initials' => collect(explode(' ', trim($this->name)))
                 ->take(2)->map(fn ($w) => mb_substr($w, 0, 1))->join(''),
             'brand'    => [
